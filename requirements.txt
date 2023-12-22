@@ -1,0 +1,4 @@
+numpy
+matplotlib
+pandas
+pressureplate @ git+https://github.com/uoe-agents/pressureplate.git

@@ -6,6 +6,9 @@ change it to apply to discrete instead of continuous spaces. The authors have
 provided an [implementation](https://github.com/qian18long/epciclr2020) of the
 method that we can use for inspiration.
 
+There is also [maddpg](https://github.com/openai/maddpg) repo from OpenAI that we
+could utilise.
+
 # Environment
 We will use the [PressurePlate](https://github.com/uoe-agents/pressureplate)
 environment. We can directly install this environment from its github repo:
