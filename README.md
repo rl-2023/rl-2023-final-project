@@ -40,8 +40,15 @@ The action space is discrete with 5 actions:
 You need to pass an action for **each** agent to the environment, e.g. for 4 agents:
 
 ```python
-env.step([0, 0, 0, 0])
+observations, rewards, dones, _ = env.step([0, 0, 0, 0])
 ```
+
+The `step()` function returns the following:
+
+* the observations of all agents as a nested list, e.g. for 4 agents a list with 4 lists.
+* the floating point rewards of all agents as a list
+* whether the agents have reached the goal, as a list of booleans
+* an empty dictionary (who knows why)
 
 ## Observation Space
 Each agent only sees the subset of the entire environment that is around them. It can be controlled with the `sensor_range`
