@@ -12,6 +12,10 @@ class Observation:
     def __init__(self, observation: torch.Tensor):
         self._observation = observation
 
+        # make sure we are dealing with 2 dimensional tensor
+        if observation.dim() == 1:
+            observation = observation.reshape(1, -1)
+
         grids = observation[:, :-2].reshape(4, -1)
 
         self.agent_grid = grids[0]
@@ -19,6 +23,7 @@ class Observation:
         self.doors_grid = grids[2]
         self.goals_grid = grids[3]
         self.coordinates = observation[:, -2:].reshape(2)
+
 
 def get_visible_agent_observations(observations: torch.Tensor, agent: int, sensor_range: int) -> torch.Tensor:
     """Returns the observations of the agents visible to the given agent.
