@@ -51,11 +51,19 @@ The `step()` function returns the following:
 * an empty dictionary (who knows why)
 
 ## Observation Space
-Each agent only sees the subset of the entire environment that is around them. It can be controlled with the `sensor_range`
-attribute of the `PressurePlate` class. The default value is 10 and so the agent sees a 10x10 grid around themself.
+Each agent only sees the subset of the entire environment that is around them as layered 2D grids. It can be controlled with the `sensor_range`
+attribute of the `PressurePlate` class. The default value is **4** and so the agent sees 4 steps in each direction,
+creating a 5x5 grid around themselves, since distances are measured with the Manhattan distance. 
 
-This grid is flattened from 10x10 to 1x100, with 0s indicating spaces the agent can move to or walls, 1s indicating the
-doors. The agent's x,y coordinates are concatenated at the end, giving us an observation of size 1x102.
+The 4 grids that each agent can see are the:
+
+* **agent grid**: 1s where there are other agents, 0s where there are no other agents.
+* **plates grid**: 1s where there are pressure plates, 0s where there are no plates.
+* **doors grid**: 1s where there are doors, 0s where there are no doors.
+* **goal grid**: 1s where the goal is, 0s where the goal is not.
+
+The 4 grids are **flattened** from 5x5 into 1x25 and then **concatenated** into 1x100. Finally, the agent's x,y 
+coordinates are concatenated at the end, giving us an observation of size 1x102.
 
 ```python
 # agent is at coordinates 5,13
