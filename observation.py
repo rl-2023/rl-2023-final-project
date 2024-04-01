@@ -40,4 +40,17 @@ def get_visible_agent_observations(observations: torch.Tensor, agent: int, senso
     Returns:
         torch.Tensor: the observations of the agents visible to the agent.
     """
-    pass
+    agent_coords = observations[agent, -2:].reshape(-1, 2)
+
+    num_agents = observations.shape[0]
+    other_agents = torch.IntTensor([other_agent for other_agent in range(num_agents) if other_agent != agent])
+    other_agent_coords = observations[other_agents, -2:]
+
+    distances = torch.cdist(agent_coords, observations, p=1)
+    close_observations = torch.squeeze(distances <= sensor_range)
+
+    # remove the agent from the close observations
+    close_observations[agent] = False
+    close_observations = observations[close_observations, :]
+
+    return close_observations
