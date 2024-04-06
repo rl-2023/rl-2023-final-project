@@ -1,4 +1,6 @@
 """Module with functionality for extracting and processing observations from the PressurePlate environment."""
+from typing import Union, List, Iterable
+
 import torch
 
 
@@ -23,7 +25,34 @@ class Observation:
         self.doors_grid = grids[2]
         self.goals_grid = grids[3]
         self.coordinates = observation[:, -2:].reshape(2)
+        self.entity_observation = observation[:, :-2]
 
+
+def extract_observation_grids(observation: torch.Tensor):
+    """Extracts the 2D grids from the observation.
+
+    The observation is a row tensor of chained 2D observations as well as the coordinates of the agent. This function
+    splits the tensor into the flat grids and the coordinates of the agent and returns them. Assumes 4 grids in the
+    observation.
+
+    Args:
+        observation (torch.Tensor): the observation from the pressure plate environment, in the shape (1, n) or (,n).
+
+    Returns:
+        the agent, plates, doors, goals grids and the coordinates, all as tensors.
+    """
+    if observation.dim() == 1:
+        observation = observation.reshape(1, -1)
+
+    grids = observation[:, :-2].reshape(4, -1)
+
+    agent_grid = grids[0]
+    plates_grid = grids[1]
+    doors_grid = grids[2]
+    goals_grid = grids[3]
+    coordinates = observation[:, -2:].reshape(2)
+
+    return agent_grid, plates_grid, doors_grid, goals_grid, coordinates
 
 def get_visible_agent_observations(observations: torch.Tensor, agent: int, sensor_range: int) -> torch.Tensor:
     """Returns the observations of the agents visible to the given agent.
