@@ -37,7 +37,21 @@ class ObservationEncoder(nn.Module):
     - goals
 
     As well as the x,y coordinates of the agent. This encoder extracts each of these entities from the observation
-    tensor, and encodes them into a higher dimensional space.
+    tensor, and encodes them into a higher dimensional space. The encoder can handle a single observation or observations
+    from multiple agents. In either case, the returned tensor will be of shape (entity, agent, embedded observation).
+    The order of entities is:
+
+    - coordinates (this is the agent representation embedding)
+    - agents (embedding of the agents grid)
+    - plates (embedding of the plates grid)
+    - doors (embedding of the doors grid)
+    - goals (embedding of the goals grid)
+
+    Example usage with a random observation:
+        observation = torch.randn((4, 102)) # 4 agents with an observation of length 102
+        encoder = ObservationEncoder(observation_length=102, dim=512)
+        encoded_observation = encoder(observation)
+        encoded_observation.shape # (5, 4, 512)
     """
 
     def __init__(self, observation_length: int, dim: int = 512):
