@@ -43,3 +43,14 @@ def test_get_visible_agents_none_visible():
     visible_agents = get_visible_agent_observations(coords, 0, 1)
 
     assert len(visible_agents) == 0
+
+
+def test_get_visible_agents_with_observation_objects():
+    agent1_coords = torch.Tensor([[0, 0, 0, 0, 1, 1]])
+    agent2_coords = torch.Tensor([[0, 0, 0, 0, 10, 10]])
+    agent3_coords = torch.Tensor([[0, 0, 0, 0, 3, 4]])
+    coords = torch.cat((agent1_coords, agent2_coords, agent3_coords), dim=0)
+
+    visible_agents = get_visible_agent_observations(coords, 0, 1)
+
+    assert len(visible_agents) == 0
