@@ -102,6 +102,21 @@ class ObservationActionEncoder(nn.Module):
     their own observation action encoder. The observation-action embedding is computed by computing attention scores between the agent
     embedding and all other agent embeddings to
     """
-    pass
 
+    def __init__(self, observation_length: int, max_dist_visibility: int, dim: int = 512):
+        super().__init__()
+        self.max_dist_visibility = max_dist_visibility
 
+        self.observation_encoder = ObservationEncoder(observation_length, dim)
+        self.w_psi = nn.Linear(in_features=1, out_features=dim)
+        self.w_phi = nn.Linear(in_features=1, out_features=dim)
+
+    def forward(self, observation: torch.Tensor, action: int) -> torch.Tensor:
+        num_agents = observation.shape[0]
+
+        for i in range(num_agents):
+            visible_observations = get_visible_agent_observations(observation, i, self.max_dist_visibility)
+            agent_observations = observation[i]
+
+            agent_obs_encoded = self.observation_encoder(agent_observations)
+            visible_obs_encoded = self.observation_encoder(visible_observations)

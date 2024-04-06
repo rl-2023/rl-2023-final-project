@@ -5,8 +5,8 @@ import numpy as np
 import pressureplate
 import torch
 
-from entity_encoder import EntityEncoder
-from observation import Observation
+from entity_encoder import EntityEncoder, ObservationEncoder, ObservationActionEncoder
+from observation import Observation, get_visible_agent_observations
 
 if __name__ == "__main__":
     num_players = 4
@@ -19,6 +19,7 @@ if __name__ == "__main__":
 
     env = gym.make(f'pressureplate-linear-{num_players}p-v0')
 
+    max_dist_visibility = env.unwrapped.max_dist
     # get the shape of the observation space from the environment
     observation_shape = env.observation_space.spaces[0].shape[0]
     observation_length = (observation_shape - dim_coordinates) // num_grids
@@ -27,16 +28,21 @@ if __name__ == "__main__":
 
     # all agents go up
     observations, rewards, dones, _ = env.step([0, 0, 0, 0])
-    observations = [Observation(torch.Tensor(np.array(observation))) for observation in observations]
+    observation_stack = torch.Tensor(observations)
 
-    # create one encoder for each entity in the environment
-    agent_encoder = EntityEncoder(in_features=observation_length, out_features=512)
-    plates_encoder = EntityEncoder(in_features=observation_length, out_features=512)
-    doors_encoder = EntityEncoder(in_features=observation_length, out_features=512)
-    goal_encoder = EntityEncoder(in_features=observation_length, out_features=512)
+    oa_encoder = ObservationActionEncoder(observation_length, max_dist_visibility, 512)
+    oa_encoder(observation_stack, 0)
 
-    # shape should be 512
-    print(agent_encoder(observations[0].agent_grid).shape)
 
-    # TODO for each agent, find the agents that are visible to them
+    # then calculate attention between the observation and other visible observations
     # TODO for each agent, calculate the attention between its observation/coordinates (what exactly?) and the other agent observations
+    agent_j_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
+    agent_k_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
+    agent_l_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
+
+    # the attention calculation from the paper
+    w_psi = torch.randn((512, 1), dtype=torch.float32)
+    agent_j_entity_1_encoded.T @ w_psi.T @ w_psi @ agent_k_entity_1_encoded
+
+    # The observation of the agent should include their own agents,plates, doors, and goals, as well as all the
+    # visible agents' agents, plates, doors, and goals.

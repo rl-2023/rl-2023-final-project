@@ -54,6 +54,7 @@ def extract_observation_grids(observation: torch.Tensor):
 
     return agent_grid, plates_grid, doors_grid, goals_grid, coordinates
 
+
 def get_visible_agent_observations(observations: torch.Tensor, agent: int, sensor_range: int) -> torch.Tensor:
     """Returns the observations of the agents visible to the given agent.
 
