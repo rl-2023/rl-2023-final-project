@@ -21,6 +21,8 @@ class EntityEncoder(nn.Module):
         h1 = nn.functional.relu(self.fc1(observation))
         h2 = nn.functional.relu(self.fc2(h1))
 
+        if h2.dim() == 1:
+            h2 = h2.reshape(1, -1)
         return h2
 
 
@@ -48,15 +50,35 @@ class ObservationEncoder(nn.Module):
         self.position_encoder = EntityEncoder(in_features=2, out_features=dim)  # this is the agent representation
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
-        agent_grid, plates_grid, doors_grid, goals_grid, coordinates = extract_observation_grids(observation)
+        # if we only get a single observation, make sure we have two dimensions
+        if observation.dim() == 1:
+            observation = observation.reshape(1, -1)
 
-        agent_encoded = self.agent_encoder(agent_grid)
-        plates_encoded = self.plates_encoder(plates_grid)
-        doors_encoded = self.doors_encoder(doors_grid)
-        goals_encoded = self.goal_encoder(goals_grid)
-        coordinates_encoded = self.position_encoder(coordinates)
+        # if we get multiple observations, we want to create matrices for each entity
+        if observation.dim() == 2:
+            agent_grids = []
+            plates_grids = []
+            doors_grids = []
+            goals_grids = []
+            coordinates = []
 
-        return torch.cat((coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded), dim=0)
+            # for each agent observation, extract the observation grids
+            for i in range(observation.shape[0]):
+                agent_grid, plates_grid, doors_grid, goals_grid, coordinate = extract_observation_grids(observation[i])
+                agent_grids.append(agent_grid)
+                plates_grids.append(plates_grid)
+                doors_grids.append(doors_grid)
+                goals_grids.append(goals_grid)
+                coordinates.append(coordinate)
+
+        # encode the different observation grids, encoder receives a stack of grids
+        agent_encoded = self.agent_encoder(torch.stack(agent_grids))
+        plates_encoded = self.plates_encoder(torch.stack(plates_grids))
+        doors_encoded = self.doors_encoder(torch.stack(doors_grids))
+        goals_encoded = self.goal_encoder(torch.stack(goals_grids))
+        coordinates_encoded = self.position_encoder(torch.stack(coordinates))
+
+        return torch.stack((coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded))
 
 
 class ObservationActionEncoder(nn.Module):
