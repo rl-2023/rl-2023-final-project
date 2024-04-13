@@ -75,4 +75,18 @@ The reward is individual for each agent and is the Manhattan distance to that ag
 
 
 # Model
+
+## Entity Encoder
+The entity encoder encodes the different entities inside the environment into a higher dimension. The four entities that
+agents can see are:
+
+- agents
+- plates
+- doors
+- goal
+
+Each of these is embedded from $\mathbb{R}^{25}$ to $\mathbb{R}^{512}$ by a two-layer neural network, denoted as $g$ in
+the diagram below. The environment observations consist of entity grids that are flattened by the game and returned as 
+observations into a vector in $\mathbb{R}$. We then unfold this vector into a matrix where each row is an entity. Finally,
+we apply a dedicated entity encoder to each entity and stack the results into a matrix of shape $\mathbb{R}^{4 \times 512}$.
 ![](doc/observation_to_entity_embedding.drawio.png)
