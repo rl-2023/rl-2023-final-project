@@ -30,7 +30,7 @@ if __name__ == "__main__":
     observations, rewards, dones, _ = env.step([0, 0, 0, 0])
     observation_stack = torch.Tensor(observations)
 
-    oa_encoder = ObservationActionEncoder(observation_length, max_dist_visibility, 512)
+    oa_encoder = ObservationActionEncoder(0, observation_length, max_dist_visibility, 512)
     oa_encoder(observation_stack, 0)
 
 
