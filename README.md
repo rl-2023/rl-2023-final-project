@@ -75,4 +75,4 @@ The reward is individual for each agent and is the Manhattan distance to that ag
 
 
 # Model
-<iframe src="doc/observation_to_entity_embedding.html" width="100%" height="500px"></iframe>
+![](doc/observation_to_entity_embedding.drawio.pdf)
