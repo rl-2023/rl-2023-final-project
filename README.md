@@ -71,4 +71,8 @@ coordinates are concatenated at the end, giving us an observation of size 1x102.
 ```
 
 ## Reward
-The reward is individual for each agent and is the Manhattan distance to that agent's pressure plate. 
+The reward is individual for each agent and is the Manhattan distance to that agent's pressure plate.
+
+
+# Model
+<iframe src="doc/observation_to_entity_embedding.html" width="100%" height="500px"></iframe>
