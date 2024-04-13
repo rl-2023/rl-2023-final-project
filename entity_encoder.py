@@ -8,8 +8,18 @@ from observation import get_visible_agent_observations, extract_observation_grid
 class EntityEncoder(nn.Module):
     """The entity encoder maps entity observed by agents into a higher dimensional space.
 
+    There are 4 entity types in the pressure plate environment:
+    - plates
+    - goals
+    - agents
+    - doors
+
     The encoder is a two layer MLP with a default output dimension of 512 and ReLU non-linearities. The program contains
-    only a single instance of this encoder per entity that is shared across agents.
+    one instance of this encoder per entity that is shared across agents so that every agent uses the same encoder to
+    encode the entities they observe.
+
+    The input to the encoder can either be a single flat observation of shape (entity dim,) or a number of observations
+    in the shape (num obs, entity dim).
     """
 
     def __init__(self, in_features, out_features=512):
@@ -27,10 +37,10 @@ class EntityEncoder(nn.Module):
 
 
 class ObservationEncoder(nn.Module):
-    """The observation encoder takes an observation from the pressureplate environment as input and maps the contained entities into a higher dimension.
+    """The observation encoder takes an observation from the pressureplate environment as input and maps the contained
+    entities into a higher dimension.
 
     The observation from the pressureplate environment contains 4 entities:
-
     - other agents
     - pressure plates
     - doors
@@ -99,8 +109,13 @@ class ObservationActionEncoder(nn.Module):
     """The Observation-Action Encoder creates an embedding of the observation and action of each agent.
 
     The observation of the agent contains all other observations of the other agents in the environment. Each agent has
-    their own observation action encoder. The observation-action embedding is computed by computing attention scores between the agent
-    embedding and all other agent embeddings to
+    their own observation action encoder. The observation-action embedding is computed by computing attention scores
+    between the agent embedding and all other entity and agent embeddings because we are interested in how the agent in
+    question relates to all of his surroundings. The agent embedding in this case is just a higher dimensional
+    representation of the agents position.
+
+    The input to the encoder should be a tensor of shape (agents, observations) where observations are the raw
+    observations of the environment.
     """
 
     def __init__(self, observation_length: int, max_dist_visibility: int, dim: int = 512):
