@@ -87,24 +87,27 @@ class ObservationEncoder(nn.Module):
         """
         # if we only get a single observation, make sure we have two dimensions
         if observation.dim() == 1:
-            observation = observation.reshape(1, -1)
+            observation = observation.reshape(1, 1, -1)
 
         # if we get multiple observations, we want to create matrices for each entity
         if observation.dim() == 2:
-            agent_grids = []
-            plates_grids = []
-            doors_grids = []
-            goals_grids = []
-            coordinates = []
+            observation = observation.unsqueeze(0)
 
-            # for each agent observation, extract the observation grids
-            for i in range(observation.shape[0]):
-                agent_grid, plates_grid, doors_grid, goals_grid, coordinate = extract_observation_grids(observation[i])
-                agent_grids.append(agent_grid)
-                plates_grids.append(plates_grid)
-                doors_grids.append(doors_grid)
-                goals_grids.append(goals_grid)
-                coordinates.append(coordinate)
+        agent_grids = []
+        plates_grids = []
+        doors_grids = []
+        goals_grids = []
+        coordinates = []
+
+        # FIXME need a better way to handle batch dimensions, right now this is broken
+        # for each agent observation, extract the observation grids
+        for i in range(observation.shape[1]):
+            agent_grid, plates_grid, doors_grid, goals_grid, coordinate = extract_observation_grids(observation[i])
+            agent_grids.append(agent_grid)
+            plates_grids.append(plates_grid)
+            doors_grids.append(doors_grid)
+            goals_grids.append(goals_grid)
+            coordinates.append(coordinate)
 
         # encode the different observation grids, encoder receives a stack of grids
         agent_encoded = self.agent_encoder(torch.stack(agent_grids))
@@ -198,6 +201,8 @@ class ObservationActionEncoder(nn.Module):
 
         self.attention = EntityAttention(dim, 128)
 
+        self.fc_agent = nn.Linear(in_features=dim, out_features=dim)
+
     def forward(self, observation: torch.Tensor, action: int) -> torch.Tensor:
         """Creates the embedding of the provided observation and action.
 
@@ -228,4 +233,13 @@ class ObservationActionEncoder(nn.Module):
         # sum along the agent dimension, which means that we now have a tensor of shape (num_entities, embedding_dim)
         # where each row corresponds to an entity embedding combined from all embeddings visible to the current agent
         summed_entities = torch.sum(entities_weighted, dim=1)
+
+        # FC layer for agent observation
+
+        # should the agent entities be summed to the observed agents?
+
+        # is the agent entity just the position?
+
+        # concat agent observations together with the all the type embeddings
+        torch.concat((summed_entities, action_encoded))
         return torch.Tensor()
