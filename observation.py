@@ -41,16 +41,15 @@ def extract_observation_grids(observation: torch.Tensor):
     Returns:
         the agent, plates, doors, goals grids and the coordinates, all as tensors.
     """
+    # if we only have the observation of a single agent
     if observation.dim() == 1:
         observation = observation.reshape(1, 1, -1)
-        # grids = observation[:, :, :-2].reshape(1, 1, 4, -1)
 
-    # make sure we have a batch dimension
+    # if we have multiple agent observations, make sure we have a batch dimension
     elif observation.dim() == 2:
         observation = observation.reshape(1, *observation.shape)
-        # grids = observation[:, :, :-2].reshape(1, observation.shape[1], 4, -1)
 
-    # if we have a batch dimension
+    # reshape so that we have the 4 grids separated
     grids = observation[:, :, :-2].reshape(observation.shape[0], observation.shape[1], 4, -1)
 
 
