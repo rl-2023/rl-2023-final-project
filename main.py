@@ -30,19 +30,6 @@ if __name__ == "__main__":
     observations, rewards, dones, _ = env.step([0, 0, 0, 0])
     observation_stack = torch.Tensor(observations)
 
+    # TODO make classes handle the batch dimension
     oa_encoder = ObservationActionEncoder(0, observation_length, max_dist_visibility, 512)
     oa_encoder(observation_stack, 0)
-
-
-    # then calculate attention between the observation and other visible observations
-    # TODO for each agent, calculate the attention between its observation/coordinates (what exactly?) and the other agent observations
-    agent_j_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
-    agent_k_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
-    agent_l_entity_1_encoded = torch.randn((1, 512), dtype=torch.float32)
-
-    # the attention calculation from the paper
-    w_psi = torch.randn((512, 1), dtype=torch.float32)
-    agent_j_entity_1_encoded.T @ w_psi.T @ w_psi @ agent_k_entity_1_encoded
-
-    # The observation of the agent should include their own agents,plates, doors, and goals, as well as all the
-    # visible agents' agents, plates, doors, and goals.
