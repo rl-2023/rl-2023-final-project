@@ -42,7 +42,8 @@ def test_get_visible_agents_none_visible():
 
     visible_agents = get_visible_agent_observations(coords, 0, 1)
 
-    assert len(visible_agents) == 0
+    assert visible_agents.dim() == 3
+    assert visible_agents.numel() == 0
 
 
 def test_get_visible_agents_with_observation_objects():
@@ -53,7 +54,8 @@ def test_get_visible_agents_with_observation_objects():
 
     visible_agents = get_visible_agent_observations(coords, 0, 1)
 
-    assert len(visible_agents) == 0
+    assert visible_agents.dim() == 3
+    assert visible_agents.numel() == 0
 
 
 def test_observation_dims_no_batch():
