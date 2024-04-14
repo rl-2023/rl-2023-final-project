@@ -77,6 +77,14 @@ class ObservationEncoder(nn.Module):
         self.position_encoder = EntityEncoder(in_features=2, out_features=dim)  # this is the agent representation
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
+        """Encodes the provided observation.
+
+        Args:
+            observation (torch.Tensor): the observation to encode, should be shape (batch, agents, observations)
+
+        Returns:
+            (torch.Tensor): the encoded observations of all agents, separated by entity, shape is (agent, entity, embedded observation)
+        """
         # if we only get a single observation, make sure we have two dimensions
         if observation.dim() == 1:
             observation = observation.reshape(1, -1)
@@ -114,6 +122,12 @@ class EntityAttention(nn.Module):
     We are interested in the attention between the entities because we want to know how much the agent's observation is
     related to the things that other agents are seeing. The attention is done per-entity basis, because we want to know
     how e.g. one agent's perception of the doors is related to the other agents' perception of the doors.
+
+    Example Usage with 5 entities and 3 visible agents:
+        agent_obs = torch.randn((8, 5, 512))
+        visible_obs = torch.randn((8, 5, 3, 512))
+        attention = EntityAttention(512, 128)
+        attention(agent_obs, visible_obs) # will return attention weights of shape (8, 5, 3)
     """
 
     def __init__(self, observation_dim: int, attention_dim: int):
@@ -185,7 +199,15 @@ class ObservationActionEncoder(nn.Module):
         self.attention = EntityAttention(dim, 128)
 
     def forward(self, observation: torch.Tensor, action: int) -> torch.Tensor:
+        """Creates the embedding of the provided observation and action.
 
+        Args:
+            observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim)
+            action (int): the action that was taken by the agent owning this class.
+
+        Returns:
+            (torch.Tensor): the embedding of the observation and action.
+        """
         action_encoded = self.action_encoder(torch.FloatTensor([action]))
         visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
                                                               sensor_range=self.max_dist_visibility)
