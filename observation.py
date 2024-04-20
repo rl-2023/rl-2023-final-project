@@ -81,17 +81,21 @@ def get_visible_agent_observations(observations: torch.Tensor, agent: int, senso
     if observations.dim() == 2:
         observations = observations.reshape(1, *observations.shape)
 
-    agent_coords = observations[:, agent, -2:].reshape(-1, 2)
+    batch_size = observations.shape[0]
+    dim = observations.shape[-1]
+
+    # we want the agent coords to have the same number of dims as the observations, (batch, agent, coords)
+    agent_coords = observations[:, agent, -2:].unsqueeze(1)
 
     # find all the distances between the agent in question and all the other agent coordinates, using Manhattan because
     # we are in a 2D grid world where agents can only move vertically and horizontally.
     distances = torch.cdist(agent_coords, observations[:, :, -2:], p=1)
 
-    # find the observations that are within sensor range
-    close_observations = torch.squeeze(distances <= sensor_range)
+    # find the observations that are within sensor range, reshape so that we have (batch size, num agents)
+    close_observations = (distances <= sensor_range).reshape(batch_size, -1)
 
     # remove the agent from the close observations
-    close_observations[agent] = False
-    close_observations = observations[:, close_observations, :]
+    close_observations[:, agent] = False
+    close_observations = observations[close_observations].reshape(batch_size, -1, dim)
 
     return close_observations

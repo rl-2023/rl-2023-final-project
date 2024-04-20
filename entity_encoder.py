@@ -204,8 +204,10 @@ class ObservationActionEncoder(nn.Module):
         action_encoded = self.action_encoder(torch.FloatTensor([action]))
         visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
                                                               sensor_range=self.max_dist_visibility)
-        agent_observations = observation[self.agent]
+        # maintain the agent dimension, we always want shape (batch, agent, dim)
+        agent_observations = observation[:, self.agent].unsqueeze(1)
 
+        # the encoded observations are of shape (batch, entity, agent, dim)
         agent_obs_encoded = self.observation_encoder(agent_observations)
         visible_obs_encoded = self.observation_encoder(visible_observations)
 
