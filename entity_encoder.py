@@ -93,30 +93,18 @@ class ObservationEncoder(nn.Module):
         if observation.dim() == 2:
             observation = observation.unsqueeze(0)
 
-        agent_grids = []
-        plates_grids = []
-        doors_grids = []
-        goals_grids = []
-        coordinates = []
-
-        # FIXME need a better way to handle batch dimensions, right now this is broken
-        # for each agent observation, extract the observation grids
-        for i in range(observation.shape[1]):
-            agent_grid, plates_grid, doors_grid, goals_grid, coordinate = extract_observation_grids(observation[i])
-            agent_grids.append(agent_grid)
-            plates_grids.append(plates_grid)
-            doors_grids.append(doors_grid)
-            goals_grids.append(goals_grid)
-            coordinates.append(coordinate)
+        # the grids will have dimensions (batch, agents, grid side length)
+        agent_grids, plates_grids, doors_grids, goals_grids, coordinates = extract_observation_grids(observation)
 
         # encode the different observation grids, encoder receives a stack of grids
-        agent_encoded = self.agent_encoder(torch.stack(agent_grids))
-        plates_encoded = self.plates_encoder(torch.stack(plates_grids))
-        doors_encoded = self.doors_encoder(torch.stack(doors_grids))
-        goals_encoded = self.goal_encoder(torch.stack(goals_grids))
-        coordinates_encoded = self.position_encoder(torch.stack(coordinates))
+        agent_encoded = self.agent_encoder(agent_grids)
+        plates_encoded = self.plates_encoder(plates_grids)
+        doors_encoded = self.doors_encoder(doors_grids)
+        goals_encoded = self.goal_encoder(goals_grids)
+        coordinates_encoded = self.position_encoder(coordinates)
 
-        return torch.stack((coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded))
+        # we return tensor (batch, entity, agent, encoding dim)
+        return torch.stack((coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded), dim=1)
 
 
 class EntityAttention(nn.Module):
