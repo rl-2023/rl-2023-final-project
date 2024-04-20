@@ -110,7 +110,7 @@ class ObservationEncoder(nn.Module):
 class EntityAttention(nn.Module):
     """The Entity Attention calculates attention weights between one agents entities and the other visible agents entities.
 
-    We are interested in the attention between the entities because we want to know how much the agent's observation is
+    We are interested in the attention between the entities, because we want to know how much the agent's observation is
     related to the things that other agents are seeing. The attention is done per-entity basis, because we want to know
     how e.g. one agent's perception of the doors is related to the other agents' perception of the doors.
 
@@ -127,9 +127,19 @@ class EntityAttention(nn.Module):
         self.observation_dim = observation_dim
         self.attention_dim = attention_dim
 
-        # we should make the dimension the weights map to a parameter as well
-        self.w_psi = Variable(torch.randn(observation_dim, attention_dim).type(torch.float32), requires_grad=True)
-        self.w_phi = Variable(torch.randn(observation_dim, attention_dim).type(torch.float32), requires_grad=True)
+        self.w_psi = nn.Linear(in_features=observation_dim, out_features=attention_dim)
+        self.w_phi = nn.Linear(in_features=attention_dim, out_features=observation_dim)
+
+    def _attention(self, agent_obs: torch.Tensor, visible_obs: torch.Tensor) -> torch.Tensor:
+        # transpose everything but the batch dimension
+        visible_obs_transposed = torch.transpose(visible_obs, 1, 2)
+
+        # here we do the inner product of X @ W_psi @ W_phi.T @ Y, using bmm for batch matrix multiplication
+        # in my understanding, beta_i_j is a scalar, so I need to place the transpose on phi and the other agent,
+        # otherwise we get a matrix
+        attn_inner_product = torch.bmm(self.w_phi(self.w_psi(agent_obs)), visible_obs_transposed)
+
+        return attn_inner_product
 
     def forward(self, agent_observation: torch.Tensor, visible_observations: torch.Tensor) -> torch.Tensor:
         """Calculate the entity attention scores between the agents' observation and the visible observations of other
@@ -143,8 +153,8 @@ class EntityAttention(nn.Module):
             (torch.Tensor): The attention weights for the visible observations, in shape (batch_size, entity, agent)
         """
         # for each entity, calculate the attention between the agent that owns this OA encoder, and all the other agents
-        num_entities = agent_observation.shape[0]
-        num_visible_agents = visible_observations.shape[1]
+        num_entities = agent_observation.shape[1]
+        num_visible_agents = visible_observations.shape[2]
 
         betas = []
         for i in range(num_entities):
@@ -152,16 +162,22 @@ class EntityAttention(nn.Module):
             # and the visible agents the inner loop
             betas_entity = []
             for j in range(num_visible_agents):
-                # in my understanding, beta_i_j is a scalar, so I need to place the transpose on phi and the other agent, otherwise we get a matrix
-                beta_i_j = agent_observation[i] @ self.w_psi @ self.w_phi.T @ visible_observations[i][j].unsqueeze(-2).T
+                # make sure that the visible observations have shape (batch, agent, dim)
+                beta_i_j = self._attention(agent_observation[:, i], visible_observations[:, i, j].unsqueeze(1)) #agent_observation[i] @ self.w_psi @ self.w_phi.T @ visible_observations[i, j].unsqueeze(-2).T
                 betas_entity.append(beta_i_j)
-            betas.append(torch.Tensor(betas_entity))
 
-        # stack all the betas so that each row contains all the betas for a given entity for all agents
-        betas = torch.stack(betas)
+            # at this stage, betas_entity contains all non-softmaxed attention scores for a given entity
+            # concatenate the list of betas together so that we have the shape (batch, entity, visible agents)
+            betas_entity = torch.concat(betas_entity, dim=-1)
 
-        # do softmax to get the alphas, since we want this per entity, we apply it to each row
-        alphas = F.softmax(betas, dim=1)
+            betas.append(betas_entity)
+
+        # concat all the betas on the entity dimension, because each betas_entity has the values for a single entity
+        betas = torch.concat(betas, dim=1)
+
+        # do softmax to get the alphas, since we want the softmax over the betas of ALL agents for EACH entity, we apply
+        # it to the final dimension
+        alphas = F.softmax(betas, dim=-1)
 
         return alphas
 
@@ -217,12 +233,13 @@ class ObservationActionEncoder(nn.Module):
         # finally, we use the alphas which are just importance values to weigh the observations of the agents visible
         # to the agent owning this OA, and then sum up along the agent dimension, so that we have the new embeddings
         # of the entities now
-        # we have to unsqueeze the alphas so that they have shapes (num_entities, num_agents, 1) and can be used to
-        entities_weighted = alphas.unsqueeze(2) * visible_obs_encoded
+        # we have to unsqueeze the alphas so that they have shapes (batch, num_entities, num_agents, 1) and can be used
+        # to weigh the observations visible to the agent
+        entities_weighted = alphas.unsqueeze(-1) * visible_obs_encoded
 
-        # sum along the agent dimension, which means that we now have a tensor of shape (num_entities, embedding_dim)
+        # sum along the agent dimension, which means that we now have a tensor of shape (batch, num_entities, embedding_dim)
         # where each row corresponds to an entity embedding combined from all embeddings visible to the current agent
-        summed_entities = torch.sum(entities_weighted, dim=1)
+        summed_entities = torch.sum(entities_weighted, dim=-2)
 
         # FC layer for agent observation
 
