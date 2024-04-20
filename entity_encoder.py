@@ -146,12 +146,20 @@ class EntityAttention(nn.Module):
         agents.
 
         Args:
-            agent_observation (torch.Tensor): The agent's encoded observation of shape (batch_size, entity, observation_dim).
+            agent_observation (torch.Tensor): The agent's encoded observation of shape (batch_size, entity, agent, observation_dim).
             visible_observations (torch.Tensor): The agent's encoded observation of shape (batch_size, entity, agent, observation_dim).
 
         Returns:
             (torch.Tensor): The attention weights for the visible observations, in shape (batch_size, entity, agent)
         """
+        if agent_observation.dim() != 4:
+            raise ValueError(f"Expected agent observation to be 4D tensor of shape (batch_size, entity, agent, "
+                             f"observation_dim), but got {visible_observations.dim()} instead.")
+
+        if visible_observations.dim() != 4:
+            raise ValueError(f"Expected visible observations to be 4D tensor of shape (batch_size, entity, agent, "
+                             f"observation_dim), but got {visible_observations.dim()} instead.")
+
         # for each entity, calculate the attention between the agent that owns this OA encoder, and all the other agents
         num_entities = agent_observation.shape[1]
         num_visible_agents = visible_observations.shape[2]
