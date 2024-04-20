@@ -1,14 +1,13 @@
 import gym
-import numpy as np
-
 # need to run the pressure plate import to register the environment with gym
 import pressureplate
 import torch
 
-from entity_encoder import EntityEncoder, ObservationEncoder, ObservationActionEncoder
-from observation import Observation, get_visible_agent_observations
+from entity_encoder import ObservationActionEncoder
+from observation import extract_observation_grids
 
 if __name__ == "__main__":
+    pressureplate
     num_players = 4
 
     # the number of grids that are contained in each observation
@@ -29,7 +28,8 @@ if __name__ == "__main__":
     # all agents go up
     observations, rewards, dones, _ = env.step([0, 0, 0, 0])
     observation_stack = torch.Tensor(observations)
+    observation_stack = torch.stack((observation_stack, observation_stack))
+    extract_observation_grids(observation_stack)
 
-    # TODO make classes handle the batch dimension
     oa_encoder = ObservationActionEncoder(0, observation_length, max_dist_visibility, 512)
     oa_encoder(observation_stack, 0)

@@ -3,7 +3,6 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.autograd import Variable
 
 from observation import get_visible_agent_observations, extract_observation_grids
 
@@ -85,6 +84,7 @@ class ObservationEncoder(nn.Module):
         Returns:
             (torch.Tensor): the encoded observations of all agents, separated by entity, shape is (agent, entity, embedded observation)
         """
+        # TODO raise error if no batch dimension found instead of fixing it
         # if we only get a single observation, make sure we have two dimensions
         if observation.dim() == 1:
             observation = observation.reshape(1, 1, -1)
@@ -256,5 +256,5 @@ class ObservationActionEncoder(nn.Module):
         # is the agent entity just the position?
 
         # concat agent observations together with the all the type embeddings
-        torch.concat((summed_entities, action_encoded))
+        # torch.concat((summed_entities, action_encoded))
         return torch.Tensor()
