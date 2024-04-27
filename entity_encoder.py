@@ -226,7 +226,8 @@ class ObservationActionEncoder(nn.Module):
         """Creates the embedding of the provided observation and action.
 
         Args:
-            observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim)
+            observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim),
+            where environment_dim is the length of the flattened 2D grid that the agent sees.
             action (int): the action that was taken by the agent owning this class.
 
         Returns:

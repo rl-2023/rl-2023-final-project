@@ -1,4 +1,4 @@
-from entity_encoder import EntityEncoder, ObservationEncoder, EntityAttention
+from entity_encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder
 import torch
 
 
@@ -39,3 +39,17 @@ def test_attention_dims():
 
     assert alphas.dim() == 3
     assert alphas.shape == (batch_size, num_agents, num_agents)
+
+
+def test_obseration_action_encoder_dims():
+    batch_size = 8
+    num_agents = 4
+    dim = 128
+    action = torch.Tensor([[1] * batch_size]).reshape(batch_size, -1)
+    obs = torch.randn((batch_size, num_agents, 102))
+    oa_encoder = ObservationActionEncoder(agent=0, observation_length=25, max_dist_visibility=10, dim=dim)
+
+    encoded = oa_encoder(obs, action)
+
+    assert encoded.dim() == 2
+    assert encoded.shape == (batch_size, dim)
