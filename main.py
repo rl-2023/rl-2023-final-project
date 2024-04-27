@@ -3,7 +3,7 @@ import gym
 import pressureplate
 import torch
 
-from entity_encoder import ObservationActionEncoder
+from entity_encoder import ObservationActionEncoder, Q
 from observation import extract_observation_grids
 
 if __name__ == "__main__":
@@ -26,10 +26,14 @@ if __name__ == "__main__":
     env.reset()
 
     # all agents go up
-    observations, rewards, dones, _ = env.step([0, 0, 0, 0])
+    action = [0, 0, 0, 0]
+    observations, rewards, dones, _ = env.step(action)
     observation_stack = torch.Tensor(observations)
     observation_stack = torch.stack((observation_stack, observation_stack))
     extract_observation_grids(observation_stack)
 
-    oa_encoder = ObservationActionEncoder(0, observation_length, max_dist_visibility, 512)
-    oa_encoder(observation_stack, torch.Tensor([[0, 0]]).reshape(2, 1))
+    oa_encoder = ObservationActionEncoder(observation_length, max_dist_visibility, 512)
+
+    q_function = Q(agent=0, observation_action_encoder=oa_encoder)
+    q_function(observation_stack, torch.Tensor([action, action]).reshape(2, -1))
+    #oa_encoder(observation_stack, torch.Tensor([[0, 0]]).reshape(2, 1))

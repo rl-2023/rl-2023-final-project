@@ -115,7 +115,7 @@ class EntityAttention(nn.Module):
     how e.g. one agent's perception of the doors is related to the other agents' perception of the doors.
 
     Example Usage with 5 entities and 3 visible agents:
-        agent_obs = torch.randn((8, 5, 512))
+        agent_obs = torch.randn((8, 5, 1, 512))
         visible_obs = torch.randn((8, 5, 3, 512))
         attention = EntityAttention(512, 128)
         attention(agent_obs, visible_obs) # will return attention weights of shape (8, 5, 3)
@@ -171,7 +171,7 @@ class EntityAttention(nn.Module):
             betas_entity = []
             for j in range(num_visible_agents):
                 # make sure that the visible observations have shape (batch, agent, dim)
-                beta_i_j = self._attention(agent_observation[:, i], visible_observations[:, i, j].unsqueeze(1)) #agent_observation[i] @ self.w_psi @ self.w_phi.T @ visible_observations[i, j].unsqueeze(-2).T
+                beta_i_j = self._attention(agent_observation[:, i], visible_observations[:, i, j].unsqueeze(1))
                 betas_entity.append(beta_i_j)
 
             # at this stage, betas_entity contains all non-softmaxed attention scores for a given entity
@@ -193,8 +193,8 @@ class EntityAttention(nn.Module):
 class ObservationActionEncoder(nn.Module):
     """The Observation-Action Encoder creates an embedding of the observation and action of an agent.
 
-    The observation of the agent contains all other observations of the other agents in the environment. Each agent has
-    their own observation action encoder. The observation-action embedding is computed by computing attention scores
+    The observation of the agent contains all other observations of the other agents in the environment. There is only
+    a single overall instance of this encoder. The observation-action embedding is computed by computing attention scores
     between the agent embedding and all other entity and agent embeddings because we are interested in how the agent in
     question relates to all of his surroundings. The agent embedding in this case is just a higher dimensional
     representation of the agents position.
@@ -203,10 +203,10 @@ class ObservationActionEncoder(nn.Module):
     observations of the environment.
     """
 
-    def __init__(self, agent: int, observation_length: int, max_dist_visibility: int, dim: int = 512):
+    def __init__(self, observation_length: int, max_dist_visibility: int, dim: int = 512):
         super().__init__()
-        self.agent = agent
         self.max_dist_visibility = max_dist_visibility
+        self.dim = dim
 
         self.observation_encoder = ObservationEncoder(observation_length, dim)
         self.action_encoder = nn.Linear(in_features=1, out_features=dim)
@@ -222,10 +222,11 @@ class ObservationActionEncoder(nn.Module):
         fc_final_dim_in = (2 * num_entities + 1) * dim
         self.fc_final = nn.Linear(in_features=fc_final_dim_in, out_features=dim)
 
-    def forward(self, observation: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+    def forward(self, agent: int, observation: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """Creates the embedding of the provided observation and action.
 
         Args:
+            agent (int): The agent for which to create the embedding.
             observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim),
             where environment_dim is the length of the flattened 2D grid that the agent sees.
             action (int): the action that was taken by the agent owning this class.
@@ -233,11 +234,14 @@ class ObservationActionEncoder(nn.Module):
         Returns:
             (torch.Tensor): the embedding of the observation and action.
         """
+        if action.dim() != 2:
+            raise ValueError(f"Action must have a batch dimension, found {action.dim()} dimensions.")
+
         action_encoded = self.action_encoder(action)
-        visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
+        visible_observations = get_visible_agent_observations(observations=observation, agent=agent,
                                                               sensor_range=self.max_dist_visibility)
         # maintain the agent dimension, we always want shape (batch, agent, dim)
-        agent_observations = observation[:, self.agent].unsqueeze(1)
+        agent_observations = observation[:, agent].unsqueeze(1)
 
         # the encoded observations are of shape (batch, entity, agent, dim)
         agent_obs_encoded = self.observation_encoder(agent_observations)
@@ -259,7 +263,6 @@ class ObservationActionEncoder(nn.Module):
 
         # FC layer for agent observation
 
-
         # is the agent entity just the position?
 
         # concat agent observations together with the all the type embeddings so that we have (batch, embedding)
@@ -279,3 +282,98 @@ class ObservationActionEncoder(nn.Module):
         obs_action_vector = torch.concat((obs_flattened, action_encoded), dim=-1)
 
         return self.fc_final(obs_action_vector)
+
+
+class Q(nn.Module):
+    """The Q function of the MADDPG algorithm for the pressure plate environment.
+
+    The Q function estimates the discounted sum of expected rewards for a state-action pair. The function combines the
+    embeddings of ObservationActionEncoder for each agent in the system, via an attention mechanism, and forwards them
+    through a fully connected layer to get a single Q-value. Each agent has an instance of this Q function, with a shared
+    a single shared ObservationActionEncoder.
+
+    The input to the Q function should be a tensor of shape (batch_size, environment_dim), as well as a tensor of the
+    action taken by the agent owning this Q function, shape (batch_size, action_dim).
+
+    Args:
+        agent (int): The agent that owns this Q-function. Will be used to index the observation tensor.
+        observation_action_encoder(ObservationActionEncoder): The ObservationActionEncoder to use.
+    """
+
+    def __init__(self, agent: int, observation_action_encoder: ObservationActionEncoder):
+        super().__init__()
+        self.agent = agent
+        self.observation_action_encoder = observation_action_encoder
+        self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=128)
+
+        self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim, out_features=observation_action_encoder.dim)
+        self.fc_final = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=1)
+
+    def forward(self, observation: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
+        """Calculates the Q-value for the given observation-action pair.
+
+        The Q-value is calculated using weighted observation action encoder embeddings. As a first step, all
+        observation-action pairs are pushed through an Observation-Action Encoder, that returns an embedding of the
+        observation and action for each agent. Following, we calculate attention scores between the OA embedding of the
+        agent owning this Q-function and the other OA embeddings. The other embeddings are then weighed using these
+        scores and summed. Finally, we concatenate this weighted sum with the agent embedding that has been forwarded
+        through another fully connected layer, and feed it through a final fully connected layer that outputs the Q-value.
+
+        Args:
+            observation (torch.Tensor): the observation from the environment, shape (batch_size, environment_dim).
+            actions (torch.Tensor): the action taken by all agents, shape (batch_size, agent, action_dim).
+
+        Returns:
+            torch.Tensor: the Q-value for the given observation-action pair.
+        """
+        # run each agents observation-action pair through the OA encoder
+        num_agents = observation.shape[1]
+        oa_embeddings = []
+
+        for agent in range(num_agents):
+            # make sure we maintain batch dimension
+            action = actions[:, agent].reshape(actions.shape[0], -1)
+            oa_embedding = self.observation_action_encoder.forward(agent, observation, action)
+
+            oa_embeddings.append(oa_embedding)
+
+        # stack all the embeddings on the agent dimension such that we have the batch dimension in front
+        oa_embeddings = torch.stack(oa_embeddings, dim=1)
+
+        # get the agent that owns this Q function from all the embeddings, unsqueeze to maintain the agent dimension
+        # so that we have (batch_size, agent, embedding size)
+        agent_oa_embedding = oa_embeddings[:, self.agent].unsqueeze(1)
+
+        # get the indeces of all the other agents, makes for easier array slicing
+        all_agents = torch.IntTensor([range(num_agents)])
+        other_agents = all_agents[all_agents != self.agent]
+
+        # get the embeddings of all the other agents
+        other_agent_oa_embeddings = oa_embeddings[:, other_agents]
+
+        # combine the OA embeddings using attention, again we unsqueeze because the attention class I wrote requires
+        # an entity dimension that we usually calculate the attention across, here all agents can be considered the
+        # same entity, so it is a dummy dimension
+        attn_weights = self.attention(agent_oa_embedding.unsqueeze(1), other_agent_oa_embeddings.unsqueeze(1))
+
+        # the attention weights come in the shape (batch_size, entity, agents), but in this case we need them as
+        # (batch_size, agents, 1) so that we can easily multiply them with the OA embeddings
+        attn_weights = attn_weights.permute(0, 2, 1)
+
+        # weigh the other agent embeddings with the attention weights
+        other_agent_oa_embeddings = other_agent_oa_embeddings * attn_weights
+
+        # and sum the agent OA embeddings on the agent dimension, going from (batch_size, agent, embedding dim) to
+        # (batch_size, embedding_dim)
+        other_agent_oa_embeddings = torch.sum(other_agent_oa_embeddings, dim=-2)
+
+        # push agent OA embedding through FC layer, removing the entity dimension
+        agent_fc = self.fc_agent(agent_oa_embedding.squeeze(1))
+
+        # concatenate all embeddings in a vector on the embedding dimensions, to get the final vector
+        oa_embeddings_vector = torch.cat((agent_fc, other_agent_oa_embeddings), dim=-1)
+
+        # add final FC layer that outputs Q-value
+        q_value = self.fc_final(oa_embeddings_vector)
+
+        return q_value
