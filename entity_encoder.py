@@ -215,7 +215,14 @@ class ObservationActionEncoder(nn.Module):
 
         self.fc_agent = nn.Linear(in_features=dim, out_features=dim)
 
-    def forward(self, observation: torch.Tensor, action: int) -> torch.Tensor:
+        num_entities = 5
+
+        # our final vector will have the entities from the agent and the visible agents (2 * num entities) as well as
+        # the action embedding, all with dimensionality "dim".
+        fc_final_dim_in = (2 * num_entities + 1) * dim
+        self.fc_final = nn.Linear(in_features=fc_final_dim_in, out_features=dim)
+
+    def forward(self, observation: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """Creates the embedding of the provided observation and action.
 
         Args:
@@ -225,7 +232,7 @@ class ObservationActionEncoder(nn.Module):
         Returns:
             (torch.Tensor): the embedding of the observation and action.
         """
-        action_encoded = self.action_encoder(torch.FloatTensor([action]))
+        action_encoded = self.action_encoder(action)
         visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
                                                               sensor_range=self.max_dist_visibility)
         # maintain the agent dimension, we always want shape (batch, agent, dim)
@@ -251,10 +258,23 @@ class ObservationActionEncoder(nn.Module):
 
         # FC layer for agent observation
 
-        # should the agent entities be summed to the observed agents?
 
         # is the agent entity just the position?
 
-        # concat agent observations together with the all the type embeddings
-        # torch.concat((summed_entities, action_encoded))
-        return torch.Tensor()
+        # concat agent observations together with the all the type embeddings so that we have (batch, embedding)
+
+        # remove the agent dimension from the agent obs so that we have the same number of dims as the summed entities,
+        # (batch, entity, embedding dim)
+        agent_obs_encoded = agent_obs_encoded.squeeze(-2)
+
+        # we first concatenate the agent observations with the weighted entities, along the entity dimension, maintaining
+        # shape (batch, entity, embedding)
+        obs_concatenated = torch.cat((agent_obs_encoded, summed_entities), dim=-2)
+
+        # then we want to flatten it into (batch, embedding) so that it can be concatenated together with the action embedding
+        obs_flattened = obs_concatenated.flatten(-2, -1)
+
+        # and finally we can concatenate the observations with the action to get our final observation-action vector
+        obs_action_vector = torch.concat((obs_flattened, action_encoded), dim=-1)
+
+        return self.fc_final(obs_action_vector)

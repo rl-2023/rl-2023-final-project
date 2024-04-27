@@ -32,4 +32,4 @@ if __name__ == "__main__":
     extract_observation_grids(observation_stack)
 
     oa_encoder = ObservationActionEncoder(0, observation_length, max_dist_visibility, 512)
-    oa_encoder(observation_stack, 0)
+    oa_encoder(observation_stack, torch.Tensor([[0, 0]]).reshape(2, 1))
