@@ -1,4 +1,4 @@
-from entity_encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder, Q
+from encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder, Q
 import torch
 
 
