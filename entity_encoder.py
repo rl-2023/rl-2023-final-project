@@ -201,9 +201,22 @@ class ObservationActionEncoder(nn.Module):
 
     The input to the encoder should be a tensor of shape (agents, observations) where observations are the raw
     observations of the environment.
+
+    Args:
+        observation_length (int): The length of a flattened 2D observation in the pressure plate environment.
+        max_dist_visibility (int): The maximum Manhattan distance that an agent can see.
+        dim (int): the dimensionality of the final embedding.
+        attention_dim (int): The dimensionality of the attention weights.
+
+    Example Usage:
+        oa_encoder = ObservationActionEncoder(observation_length=25, max_dist_visibility=10, dim=256, attention_dim=128)
+        agent = 0
+        observation = torch.randn((8, 4, 102))
+        action = torch.Tensor([[0, 0, 0, 0, 0, 0, 0, 0]]).reshape(8, -1)
+        oa_encoder(agent, observation, action)
     """
 
-    def __init__(self, observation_length: int, max_dist_visibility: int, dim: int = 512):
+    def __init__(self, observation_length: int, max_dist_visibility: int, dim: int = 512, attention_dim: int = 128):
         super().__init__()
         self.max_dist_visibility = max_dist_visibility
         self.dim = dim
@@ -211,7 +224,7 @@ class ObservationActionEncoder(nn.Module):
         self.observation_encoder = ObservationEncoder(observation_length, dim)
         self.action_encoder = nn.Linear(in_features=1, out_features=dim)
 
-        self.attention = EntityAttention(dim, 128)
+        self.attention = EntityAttention(dim, attention_dim)
 
         self.fc_agent = nn.Linear(in_features=dim, out_features=dim)
 
@@ -229,7 +242,7 @@ class ObservationActionEncoder(nn.Module):
             agent (int): The agent for which to create the embedding.
             observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim),
             where environment_dim is the length of the flattened 2D grid that the agent sees.
-            action (int): the action that was taken by the agent owning this class.
+            action (int): the action that was taken by the agent that we encode the observation for.
 
         Returns:
             (torch.Tensor): the embedding of the observation and action.
@@ -298,6 +311,14 @@ class Q(nn.Module):
     Args:
         agent (int): The agent that owns this Q-function. Will be used to index the observation tensor.
         observation_action_encoder(ObservationActionEncoder): The ObservationActionEncoder to use.
+
+    Example usage:
+        agent = 0
+        oa_encoder = ObservationActionEncoder(observation_length=25, max_dist_visibility=10, dim=256, attention_dim=128)
+        q = Q(agent=0, observation_action_encoder=oa_encoder)
+        observation = torch.randn((8, 4, 102))
+        actions = torch.Tensor([[0, 0, 0, 0, 0, 0, 0, 0] * 4]).reshape(8, -1)
+        q(observation, actions)
     """
 
     def __init__(self, agent: int, observation_action_encoder: ObservationActionEncoder):
