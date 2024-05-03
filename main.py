@@ -3,7 +3,8 @@ import gym
 import pressureplate
 import torch
 
-from encoder import ObservationActionEncoder, Q
+from encoder import ObservationActionEncoder
+from maddpg import Q
 from observation import extract_observation_grids
 
 if __name__ == "__main__":
