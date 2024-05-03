@@ -76,9 +76,9 @@ def test_policy_network_dims():
     num_agents = 4
     dim = 128
     obs = torch.randn((batch_size, num_agents, 102))
-    policy_network = PolicyNetwork(observation_length=25, max_dist_visibility=10, dim=dim)
+    policy_network = PolicyNetwork(agent=0, observation_length=25, max_dist_visibility=10, dim=dim)
 
-    action = policy_network(agent=0, observation=obs)
+    action = policy_network(observation=obs)
 
     assert action.dim() == 2
     assert action.shape == (batch_size, 1)

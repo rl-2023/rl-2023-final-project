@@ -213,6 +213,6 @@ class PolicyNetwork(nn.Module):
         action_probabilities = F.softmax(actions, dim=1)
 
         # Get the predicted class for each sample in the batch
-        predicted_actions = torch.argmax(action_probabilities, dim=1)
+        predicted_actions = torch.argmax(action_probabilities, dim=1, keepdim=True)
 
         return predicted_actions
