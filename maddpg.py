@@ -7,8 +7,10 @@ from this module.
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
-from encoder import ObservationActionEncoder, EntityAttention
+from encoder import ObservationActionEncoder, EntityAttention, ObservationEncoder
+from observation import get_visible_agent_observations
 
 
 class Q(nn.Module):
@@ -42,6 +44,7 @@ class Q(nn.Module):
         self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=128)
 
         self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim, out_features=observation_action_encoder.dim)
+        # TODO final is a two layer MLP
         self.fc_final = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=1)
 
     def forward(self, observation: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
@@ -113,3 +116,103 @@ class Q(nn.Module):
         q_value = self.fc_final(oa_embeddings_vector)
 
         return q_value
+
+
+class PolicyNetwork(nn.Module):
+    """Each agent has a Policy Network that is responsible for mapping from the state to the action space.
+
+    It receives as input an observation from the environment and outputs an action for the agent to take. The structure
+    is the same as in the ObservationActionEncoder, except that it does not use the action (since that is the output).
+
+    Args:
+        agent (int): The agent that owns this policy network and for which to calculate the action.
+        observation_length (int): The length of the flattened 2D observation from the environment.
+        dim (int): The dimension that encoders map the observations to.
+        attention_dim (int): The dimension of the attention weight matrices.
+        action_out_features (int): The dimension of the action output vectors.
+    """
+
+    def __init__(self, agent: int,
+                 observation_length: int,
+                 max_dist_visibility: int,
+                 dim: int = 512,
+                 attention_dim: int = 128,
+                 action_out_features: int = 4):
+        super().__init__()
+        self.agent = agent
+        self.max_dist_visibility = max_dist_visibility
+        self.dim = dim
+
+        self.observation_encoder = ObservationEncoder(observation_length, dim)
+        self.attention = EntityAttention(dim, attention_dim)
+        self.fc_agent = nn.Linear(in_features=dim, out_features=dim)
+
+        num_entities = 5
+
+        # our final vector will have the entities from the agent and the visible agents (2 * num entities) as well as
+        # the action embedding, all with dimensionality "dim".
+        fc_final_dim_in = (2 * num_entities) * dim
+
+        self.fc_final = nn.Linear(in_features=fc_final_dim_in, out_features=action_out_features)
+
+    def forward(self, observation: torch.Tensor) -> torch.Tensor:
+        """Calculates the action to take for the agent owning this policy network given the observation.
+
+        Args:
+            observation (torch.Tensor): the observation to be encoded, should be shape (batch, agents, environment_dim),
+            where environment_dim is the length of the flattened 2D grid that the agent sees.
+
+        Returns:
+            (torch.Tensor): the
+        """
+        visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
+                                                              sensor_range=self.max_dist_visibility)
+        # maintain the agent dimension, we always want shape (batch, agent, dim)
+        agent_observations = observation[:, self.agent].unsqueeze(1)
+
+        # the encoded observations are of shape (batch, entity, agent, dim)
+        agent_obs_encoded = self.observation_encoder(agent_observations)
+        visible_obs_encoded = self.observation_encoder(visible_observations)
+
+        # calculate the attention weights
+        alphas = self.attention(agent_obs_encoded, visible_obs_encoded)
+
+        # finally, we use the alphas which are just importance values to weigh the observations of the agents visible
+        # to the agent owning this OA, and then sum up along the agent dimension, so that we have the new embeddings
+        # of the entities now
+        # we have to unsqueeze the alphas so that they have shapes (batch, num_entities, num_agents, 1) and can be used
+        # to weigh the observations visible to the agent
+        entities_weighted = alphas.unsqueeze(-1) * visible_obs_encoded
+
+        # sum along the agent dimension, which means that we now have a tensor of shape
+        # (batch, num_entities, embedding_dim) where each row corresponds to an entity embedding combined from all
+        # embeddings visible to the current agent
+        summed_entities = torch.sum(entities_weighted, dim=-2)
+
+        # FC layer for agent observation
+
+        # is the agent entity just the position?
+
+        # concat agent observations together with the all the type embeddings so that we have (batch, embedding)
+
+        # remove the agent dimension from the agent obs so that we have the same number of dims as the summed entities,
+        # (batch, entity, embedding dim)
+        agent_obs_encoded = agent_obs_encoded.squeeze(-2)
+
+        # we first concatenate the agent observations with the weighted entities, along the entity dimension,
+        # maintaining shape (batch, entity, embedding)
+        obs_concatenated = torch.cat((agent_obs_encoded, summed_entities), dim=-2)
+
+        # then we want to flatten it into (batch, embedding)
+        obs_flattened = obs_concatenated.flatten(-2, -1)
+
+        # get the values for all the actions
+        actions = self.fc_final(obs_flattened)
+
+        # Apply softmax activation function to convert logits to probabilities
+        action_probabilities = F.softmax(actions, dim=1)
+
+        # Get the predicted class for each sample in the batch
+        predicted_actions = torch.argmax(action_probabilities, dim=1)
+
+        return predicted_actions

@@ -1,4 +1,5 @@
-from encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder, Q
+from encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder
+from maddpg import Q, PolicyNetwork
 import torch
 
 
@@ -68,3 +69,16 @@ def test_q_function_dims():
 
     assert q_value.dim() == 2
     assert q_value.shape == (batch_size, 1)
+
+
+def test_policy_network_dims():
+    batch_size = 8
+    num_agents = 4
+    dim = 128
+    obs = torch.randn((batch_size, num_agents, 102))
+    policy_network = PolicyNetwork(observation_length=25, max_dist_visibility=10, dim=dim)
+
+    action = policy_network(agent=0, observation=obs)
+
+    assert action.dim() == 2
+    assert action.shape == (batch_size, 1)
