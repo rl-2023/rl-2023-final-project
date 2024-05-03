@@ -1,5 +1,4 @@
 """Module with functionality for extracting and processing observations from the PressurePlate environment."""
-from typing import Union, List, Iterable
 
 import torch
 
@@ -7,8 +6,8 @@ import torch
 class Observation:
     """Class for representing observations in the pressure plate environment.
 
-    Takes a flat observation as returned from the pressure plate environment and extracts the layered grids and coordinates
-    into 1D tensors.
+    Takes a flat observation as returned from the pressure plate environment and extracts the layered grids and
+    coordinates into 1D tensors.
     """
 
     def __init__(self, observation: torch.Tensor):
@@ -66,8 +65,8 @@ def get_visible_agent_observations(observations: torch.Tensor, agent: int, senso
     """Returns the observations of the agents visible to the given agent.
 
     Checks which agents are visible to the provided agent and returns their observations. The observations of the agent
-    itself are not returned. The x-y coordinates of the agents are assumed to be the last two elements in their observation.
-    An agent is visible to another agent if their distance is <= sensor_range.
+    itself are not returned. The x-y coordinates of the agents are assumed to be the last two elements in their
+    observation. An agent is visible to another agent if their distance is <= sensor_range.
 
     Args:
         observations (torch.Tensor): observations of all agents in the shape (agent, observation).

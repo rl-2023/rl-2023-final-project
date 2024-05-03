@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # the dimensionality of the coordinates, since we are in a 2D world, we only have x,y coordinates
     dim_coordinates = 2
 
-    env = gym.make(f'pressureplate-linear-{num_players}p-v0')
+    env = gym.make(f"pressureplate-linear-{num_players}p-v0")
 
     max_dist_visibility = env.unwrapped.max_dist
     # get the shape of the observation space from the environment
