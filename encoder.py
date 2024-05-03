@@ -199,10 +199,10 @@ class ObservationActionEncoder(nn.Module):
     """The Observation-Action Encoder creates an embedding of the observation and action of an agent.
 
     The observation of the agent contains all other observations of the other agents in the environment. There is only
-    a single overall instance of this encoder. The observation-action embedding is computed by computing attention
-    scores between the agent embedding and all other entity and agent embeddings because we are interested in how the
-    agent in question relates to all of his surroundings. The agent embedding in this case is just a higher dimensional
-    representation of the agents position.
+    a single overall instance of this encoder per Q function. The observation-action embedding is computed by computing
+    attention scores between the agent embedding and all other entity and agent embeddings because we are interested in
+    how the agent in question relates to all of his surroundings. The agent embedding in this case is just a higher
+    dimensional representation of the agents position.
 
     The input to the encoder should be a tensor of shape (agents, observations) where observations are the raw
     observations of the environment.

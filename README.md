@@ -75,9 +75,11 @@ The reward is individual for each agent and is the Manhattan distance to that ag
 
 
 # Model
+We adopt the decentralized execution framework, so each agent has its own Q function and policy
+network. 
 
-## Entity Encoder
-The entity encoder encodes the different entities inside the environment into a higher dimension. The four entities that
+## Observation Encoder
+The observation encoder $\theta$ encodes the different entities inside the environment into a higher dimension. The four entities that
 agents can see are:
 
 - agents
@@ -85,9 +87,25 @@ agents can see are:
 - doors
 - goal
 
-Each of these is embedded from $\mathbb{R}^{25}$ to $\mathbb{R}^{512}$ by a two-layer neural network, denoted as $g$ in
+Each of these is embedded from $\mathbb{R}^{25}$ to $\mathbb{R}^{512}$ by a two-layer neural network (Entity Encoder), denoted as $g$ in
 the diagram below. The environment observations consist of entity grids that are flattened by the game and returned as 
 observations into a vector in $\mathbb{R}$. We then unfold this vector into a matrix where each row is an entity. Finally,
 we apply a dedicated entity encoder to each entity and stack the results into a matrix of shape $\mathbb{R}^{4 \times 512}$.
 
 ![](doc/observation_to_entity_embedding.drawio.png)
+
+## Observation Action Encoder
+The Observation Action encoder $f$ receives an observation from the environment and first uses the Observation Encoder to
+embed it in a higher dimension. The observation is global in the sense that it is what the pressureplate environment 
+returns and it contains the information about all agents in the game. Each agent has their **own** Observation Action 
+Encoder which they use to weigh the observations of the other agents that are close to them, and embedding the weighted
+observations as well as the encoded action into the embedding dimension.
+
+## Attention Embedding
+Attention is an integral part of the Observation Encoder as well as of the Q function. It is used to calculate weights
+$\alpha$ that are used to weigh the observations of the other visible agents along the entity dimension. This means that
+the attention scores are calculated by pairwise inner product between the agent owning the Observation Action Encoder/Q 
+function and the other visible agents, for each entity separately. I.e. for the Observation Action Encoder of agent A,
+we calculate the attention as the inner product between the plates of agent A and agent B, the doors of agent A and 
+agent B etc. Essentially what we are doing is finding which parts of what the other agents are seeing is important to 
+the agents.
