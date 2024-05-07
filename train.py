@@ -60,7 +60,9 @@ if __name__=='__main__':
     buffer_size = 100
     learning_rate = 0.01
     gamma = 0.95  # discount factor
-
+    '''
+    rendering=True
+    '''
     # Environment setup
     
     num_agents = 4
@@ -89,7 +91,12 @@ if __name__=='__main__':
         observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
         #print(f"--------observations shape {observation_stack.shape}")
         episode_rewards = np.zeros(num_agents)
-        
+
+        '''
+        if  rendering:
+            env.render(mode='rgb_array')        
+        '''
+
         for step in range(steps_per_episode):
             print(f"  Step: {step}")
             actions = []
@@ -123,3 +130,7 @@ if __name__=='__main__':
 
         print(f"Episode {episode} Total Reward: {np.sum(episode_rewards)}")
         print(f"---------------------------------------------------------")
+    '''
+    env.close()
+    '''
+    
