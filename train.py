@@ -84,13 +84,14 @@ if __name__=='__main__':
 
     # Training loop
     for episode in range(episodes):
+        print(f"Episode: {episode}")
         observation = env.reset()
         observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
         #print(f"--------observations shape {observation_stack.shape}")
         episode_rewards = np.zeros(num_agents)
         
         for step in range(steps_per_episode):
-            print(f"---START STEP {step}")
+            print(f"  Step: {step}")
             actions = []
             for i in range(num_agents):
                 # Assuming the policy network can handle the current state and output an action
@@ -101,22 +102,24 @@ if __name__=='__main__':
             observation = next_observation
             observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
             episode_rewards += rewards
-            #print(f"Episode {episode} reward {np.sum(episode_rewards)}")
+            print(f"    Rewards: {rewards}")
 
             # Learning
             if len(replay_buffer) > batch_size:
-                print(f"---Actions: {actions}")
+                print(f"    Actions: {actions}")
                 experiences = random.sample(replay_buffer, batch_size)
                 #print(f"--------experiences size: {len(experiences[0])}")
                 for i in range(num_agents):
                     agents[i]['optimizer'].zero_grad()
                     loss = compute_loss(experiences, agents[i]['q_function'], [{'policy_network':agents[j]['policy_network']} for j in range(num_agents)], gamma)
-                    print(f"---loss: {loss.item()}")
                     loss.backward()
                     agents[i]['optimizer'].step()
 
+                print(f"    Loss: {loss.item()}")
+
             if all(dones):
-                print(f"---ALL DONES")
+                print(f"----ALL DONES----")
                 break
 
-        print(f"Episode {episode} Reward: {np.sum(episode_rewards)}")
+        print(f"Episode {episode} Total Reward: {np.sum(episode_rewards)}")
+        print(f"---------------------------------------------------------")
