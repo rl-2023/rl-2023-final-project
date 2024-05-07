@@ -59,7 +59,8 @@ class Q(nn.Module):
         Q-value.
 
         Args:
-            observation (torch.Tensor): the observation from the environment, shape (batch_size, environment_dim).
+            observation (torch.Tensor): the observation from the environment, shape
+            (batch_size, agent, environment_dim).
             actions (torch.Tensor): the action taken by all agents, shape (batch_size, agent, action_dim).
 
         Returns:
@@ -188,12 +189,6 @@ class PolicyNetwork(nn.Module):
         # (batch, num_entities, embedding_dim) where each row corresponds to an entity embedding combined from all
         # embeddings visible to the current agent
         summed_entities = torch.sum(entities_weighted, dim=-2)
-
-        # FC layer for agent observation
-
-        # is the agent entity just the position?
-
-        # concat agent observations together with the all the type embeddings so that we have (batch, embedding)
 
         # remove the agent dimension from the agent obs so that we have the same number of dims as the summed entities,
         # (batch, entity, embedding dim)
