@@ -10,7 +10,7 @@ from encoder import ObservationActionEncoder
 from maddpg import Q, PolicyNetwork
 from observation import extract_observation_grids
 
-def compute_loss(experiences, q_function, policy_network, gamma):
+def compute_loss(experiences, q_function, policy_network, gamma, i):
     # Unpack experiences
     observation, actions, rewards, next_observation, dones = zip(*experiences)
 
@@ -43,8 +43,8 @@ def compute_loss(experiences, q_function, policy_network, gamma):
     next_q_values = q_function(next_observation_stack, next_actions_stack) #.squeeze()
     #print(f"--------next_q_values: {next_q_values.shape}")
     # Compute the target Q-values: reward + gamma * max(next_q_values) * (1 - dones)
-    target_q_values = rewards + gamma * next_q_values * (1-dones) 
-
+    target_q_values = rewards[:, i].unsqueeze(1) + gamma * next_q_values * (1-dones[:, i].unsqueeze(1)) 
+    
     # Compute the loss using Mean Squared Error between current and target Q-values
     loss = torch.mean((current_q_values - target_q_values) ** 2)
 
@@ -54,9 +54,9 @@ def compute_loss(experiences, q_function, policy_network, gamma):
 if __name__=='__main__':
     # Hyperparameters
     pressureplate
-    episodes = 2
+    episodes = 10
     steps_per_episode = 100
-    batch_size = 32
+    batch_size =8
     buffer_size = 100
     learning_rate = 0.01
     gamma = 0.95  # discount factor
@@ -116,13 +116,15 @@ if __name__=='__main__':
                 print(f"    Actions: {actions}")
                 experiences = random.sample(replay_buffer, batch_size)
                 #print(f"--------experiences size: {len(experiences[0])}")
+                total_loss=0
                 for i in range(num_agents):
                     agents[i]['optimizer'].zero_grad()
-                    loss = compute_loss(experiences, agents[i]['q_function'], [{'policy_network':agents[j]['policy_network']} for j in range(num_agents)], gamma)
+                    loss = compute_loss(experiences, agents[i]['q_function'], [{'policy_network':agents[j]['policy_network']} for j in range(num_agents)], gamma,i)
+                    total_loss+=loss.item()
                     loss.backward()
                     agents[i]['optimizer'].step()
 
-                print(f"    Loss: {loss.item()}")
+                print(f"    Loss: {total_loss}")
 
             if all(dones):
                 print(f"----ALL DONES----")
