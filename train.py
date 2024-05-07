@@ -43,6 +43,7 @@ def compute_loss(experiences, q_function, policy_network, gamma, i):
     next_q_values = q_function(next_observation_stack, next_actions_stack) #.squeeze()
     #print(f"--------next_q_values: {next_q_values.shape}")
     # Compute the target Q-values: reward + gamma * max(next_q_values) * (1 - dones)
+    #TODO check if correct implementation
     target_q_values = rewards[:, i].unsqueeze(1) + gamma * next_q_values * (1-dones[:, i].unsqueeze(1)) 
     
     # Compute the loss using Mean Squared Error between current and target Q-values
