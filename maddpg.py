@@ -138,7 +138,7 @@ class PolicyNetwork(nn.Module):
                  max_dist_visibility: int,
                  dim: int = 512,
                  attention_dim: int = 128,
-                 action_out_features: int = 4):
+                 action_out_features: int = 5):
         super().__init__()
         self.agent = agent
         self.max_dist_visibility = max_dist_visibility
