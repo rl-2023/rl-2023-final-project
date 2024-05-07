@@ -209,8 +209,12 @@ class PolicyNetwork(nn.Module):
         # get the values for all the actions
         actions = self.fc_final(obs_flattened)
 
+        '''
         # Apply softmax activation function to convert logits to probabilities
-        action_probabilities = F.softmax(actions, dim=1)
+        action_probabilities = F.softmax(actions, dim=1)        
+        '''
+        #applying gumbel softmax activation function to convert logits to probabilities
+        action_probabilities = F.gumbel_softmax(actions, tau=1, hard=False, eps=1e-10, dim=1)
 
         # Get the predicted class for each sample in the batch
         predicted_actions = torch.argmax(action_probabilities, dim=1, keepdim=True)
