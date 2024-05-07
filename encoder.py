@@ -286,12 +286,6 @@ class ObservationActionEncoder(nn.Module):
         # embeddings visible to the current agent
         summed_entities = torch.sum(entities_weighted, dim=-2)
 
-        # FC layer for agent observation
-
-        # is the agent entity just the position?
-
-        # concat agent observations together with the all the type embeddings so that we have (batch, embedding)
-
         # remove the agent dimension from the agent obs so that we have the same number of dims as the summed entities,
         # (batch, entity, embedding dim)
         agent_obs_encoded = agent_obs_encoded.squeeze(-2)
