@@ -14,8 +14,8 @@ if __name__=='__main__':
     # Hyperparameters setup
     pressureplate
     episodes = 10
-    steps_per_episode = 1000
-    batch_size = 32
+    steps_per_episode = 100
+    batch_size = 8
     buffer_size = 100000
     learning_rate = 0.01
     gamma = 0.95  # discount factor
@@ -69,7 +69,7 @@ if __name__=='__main__':
             observation = next_observation
             observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
             episode_rewards += rewards
-            print(f"    Rewards: {rewards}")
+            print(f"    Rewards: {rewards} | Cumulative: {np.sum(episode_rewards)}")
 
             # Updating (i.e. Learning)
             if len(replay_buffer) > batch_size:
@@ -92,7 +92,7 @@ if __name__=='__main__':
                     loss_actor.backward()
                     agents[i]['optimizer'].step()                   
 
-                print(f"    Critic Loss: {total_loss_critic} | Actor Loss {total_loss_actor}")
+                print(f"    Critic Loss: {total_loss_critic} | Actor Loss: {total_loss_actor}")
 
             if all(dones):
                 print(f"----ALL DONES----")
