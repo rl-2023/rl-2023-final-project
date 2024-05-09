@@ -109,3 +109,9 @@ function and the other visible agents, for each entity separately. I.e. for the 
 we calculate the attention as the inner product between the plates of agent A and agent B, the doors of agent A and 
 agent B etc. Essentially what we are doing is finding which parts of what the other agents are seeing is important to 
 the agents.
+
+## MADDPG
+For the training of multiple agents the MADDPG has been implemented.
+It can be summarized as follow:
+
+![](doc/MADDPG.png)
