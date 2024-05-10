@@ -9,5 +9,5 @@ if __name__ == '__main__':
                                     learning_rate= 0.01, 
                                     gamma= 0.95, 
                                     tau= 0.1,
-                                    verbose_train= True)
+                                    verbose_train= False)
     training_agents.train()

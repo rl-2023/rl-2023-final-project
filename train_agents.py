@@ -9,6 +9,9 @@ import random
 from encoder import ObservationActionEncoder
 from maddpg import Q, PolicyNetwork
 
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
 class TrainingAgents:
     """
     Class to implement the training of a set of agents
@@ -44,6 +47,19 @@ class TrainingAgents:
         self.initialize_agents()
 
         self.replay_buffer = deque(maxlen=buffer_size)
+
+        # layout for the Tensorboard that we can group the losses on tensorboard
+        layout = {
+            "ABCDE": {
+                "actor loss": ["Multiline", [f"actor/loss/agent_{i}" for i in range(self.num_agents)]],
+                "critic loss": ["Multiline", [f"critic/loss/agent_{i}" for i in range(self.num_agents)]],
+            },
+        }
+        self.tb_writer = SummaryWriter()
+        self.tb_writer.add_custom_scalars(layout)
+
+        # for keeping track of the current epoch number we train on
+        self.epoch = 0
         
     def initialize_agents(self):
         for i in range(self.num_agents):
@@ -84,6 +100,7 @@ class TrainingAgents:
                     print(f"----ALL DONES: episode {episode} | step {step}----")
                     break
 
+            self.tb_writer.add_scalar("Total Episode Reward", np.sum(episode_rewards), episode)
             print(f"Episode {episode} | Total Reward: {np.sum(episode_rewards)}")
             print(f"---------------------------------------------------------")
 
@@ -105,10 +122,17 @@ class TrainingAgents:
                 loss_actor.backward()
                 agent['optimizer'].step()
 
+                self.tb_writer.add_scalar(f"critic/loss/agent_{i}", loss_critic, self.epoch)
+                self.tb_writer.add_scalar(f"actor/loss/agent_{i}", loss_actor, self.epoch)
+
+
             for agent in self.agents:
                 self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
             if self.verbose_train:
                 print(f"    Critic Loss: {total_loss_critic} | Actor Loss: {total_loss_actor}")
+
+            # keep track of the training epochs because they are different from the steps and episodes
+            self.epoch += 1
 
     def critic_loss(self, experiences, agents, i, gamma, verbose=False):
         """
