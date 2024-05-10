@@ -115,3 +115,15 @@ For the training of multiple agents the MADDPG has been implemented.
 It can be summarized as follow:
 
 ![](doc/MADDPG.png)
+
+To run the training, execute:
+
+```shell
+python main.py
+```
+
+The training algorithm logs to **tensorboard**, to start the tensorboard server:
+
+```shell
+tensorboard --logdir=runs
+```
