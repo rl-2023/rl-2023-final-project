@@ -26,7 +26,7 @@ class TrainingAgents:
                  gamma: float = 0.95, 
                  tau: float = 0.1,
                  verbose_train: bool = True):
-        
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.num_agents = num_agents
         self.episodes = episodes
         self.steps_per_episode = steps_per_episode
@@ -47,7 +47,7 @@ class TrainingAgents:
         self.initialize_agents()
 
         self.replay_buffer = deque(maxlen=buffer_size)
-
+        
         # layout for the Tensorboard that we can group the losses on tensorboard
         layout = {
             "ABCDE": {
@@ -60,19 +60,20 @@ class TrainingAgents:
 
         # for keeping track of the current epoch number we train on
         self.epoch = 0
-        
+
     def initialize_agents(self):
         for i in range(self.num_agents):
-            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist)
-            q_function = Q(agent=i, observation_action_encoder=oa_encoder)
-            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist)
-            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist)
+            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist).to(self.device)
+            q_function = Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
+            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist).to(self.device)
+            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
             self.agents.append({
                 'q_function': q_function, 
                 'policy_network': policy_network, 
                 'target_policy_network': target_policy_network,
-                'optimizer': Adam(list(q_function.parameters()) + list(policy_network.parameters()), lr=self.learning_rate)
+                'optimizer_q_function': Adam(list(q_function.parameters()) , lr=self.learning_rate),
+                'optimizer_policy_network': Adam( list(policy_network.parameters()), lr=self.learning_rate)
             })
 
     def train(self):
@@ -80,7 +81,7 @@ class TrainingAgents:
             if self.verbose_train:
                 print(f"Episode: {episode}")
             observation = self.env.reset()
-            observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
+            observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
@@ -88,7 +89,7 @@ class TrainingAgents:
                 next_observation, rewards, dones, _ = self.env.step(actions)
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
-                observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0)
+                observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
                 episode_rewards += rewards
                 if self.verbose_train:
                     print(f"  Step: {step}")
@@ -110,17 +111,17 @@ class TrainingAgents:
             total_loss_critic = 0
             total_loss_actor = 0
             for i, agent in enumerate(self.agents):
-                agent['optimizer'].zero_grad()
-                loss_critic = self.critic_loss(experiences, self.agents, i, self.gamma)
+                agent['optimizer_q_function'].zero_grad()
+                loss_critic = self.critic_loss(experiences, self.agents, i, self.gamma).to(self.device)
                 total_loss_critic += loss_critic.item()
                 loss_critic.backward()
-                agent['optimizer'].step()
+                agent['optimizer_q_function'].step()
 
-                agent['optimizer'].zero_grad()
-                loss_actor = self.actor_loss(experiences, self.agents, i)
+                agent['optimizer_policy_network'].zero_grad()
+                loss_actor = self.actor_loss(experiences, self.agents, i).to(self.device)
                 total_loss_actor += loss_actor.item()
                 loss_actor.backward()
-                agent['optimizer'].step()
+                agent['optimizer_policy_network'].step()
 
                 self.tb_writer.add_scalar(f"critic/loss/agent_{i}", loss_critic, self.epoch)
                 self.tb_writer.add_scalar(f"actor/loss/agent_{i}", loss_actor, self.epoch)
@@ -151,11 +152,11 @@ class TrainingAgents:
         #__________________________________________________________________________________________________
         #TODO create function for replay buffer
         # Convert to tensors with the appropriate types
-        observation_stack = torch.stack([torch.Tensor(np.array(obs)) for obs in observation])
-        actions = torch.stack([torch.Tensor(np.array(act)) for act in actions]).unsqueeze(2)
-        rewards = torch.Tensor(rewards)
-        next_observation_stack = torch.stack([torch.Tensor(np.array(obs)) for obs in next_observation])
-        dones = torch.Tensor(dones)
+        observation_stack = torch.stack([torch.Tensor(np.array(obs)).to(self.device) for obs in observation]).to(self.device)
+        actions = torch.stack([torch.Tensor(np.array(act)).to(self.device) for act in actions]).unsqueeze(2).to(self.device)
+        rewards = torch.Tensor(rewards).to(self.device)
+        next_observation_stack = torch.stack([torch.Tensor(np.array(obs)).to(self.device) for obs in next_observation]).to(self.device)
+        dones = torch.Tensor(dones).to(self.device)
         #__________________________________________________________________________________________________
 
         # Forward pass through the Q-function to get current Q-values
@@ -168,7 +169,7 @@ class TrainingAgents:
             next_actions=[]
             for j in range(num_agents):
                 next_actions.append( target_policy_network[j]['target_policy_network'].forward(next_observation_stack).float())
-            next_actions_stack=torch.stack([torch.Tensor(np.array(act)) for act in next_actions]).permute(1, 0, 2)
+            next_actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in next_actions]).permute(1, 0, 2).to(self.device)
             
             # Compute the target Q-values
             #TODO check if correct implementation
@@ -206,7 +207,7 @@ class TrainingAgents:
         #__________________________________________________________________________________________________
         #TODO create function for replay buffer
         # Convert to tensors with the appropriate types
-        observation_stack = torch.stack([torch.Tensor(np.array(obs)) for obs in observation])
+        observation_stack = torch.stack([torch.Tensor(np.array(obs)).to(self.device) for obs in observation]).to(self.device)
         #actions = torch.stack([torch.Tensor(np.array(act)) for act in actions]).unsqueeze(2)
         #rewards = torch.Tensor(rewards)
         #next_observation_stack = torch.stack([torch.Tensor(np.array(obs)) for obs in next_observation])
@@ -218,7 +219,7 @@ class TrainingAgents:
         actions=[]
         for j in range(num_agents):
             actions.append( policy_network[j]['policy_network'].forward(observation_stack).float())
-        actions_stack=torch.stack([torch.Tensor(np.array(act)) for act in actions]).permute(1, 0, 2)
+        actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in actions]).permute(1, 0, 2).to(self.device)
 
         #__________________________________________________________________________________________________
         #Computing the loss which have the minus because we want gradient ascent
