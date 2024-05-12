@@ -119,7 +119,7 @@ It can be summarized as follow:
 To run the training, execute:
 
 ```shell
-python main.py
+python __main__.py
 ```
 
 The training algorithm logs to **tensorboard**, to start the tensorboard server:

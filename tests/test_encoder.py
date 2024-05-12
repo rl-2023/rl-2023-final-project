@@ -1,5 +1,5 @@
-from encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder
-from maddpg import Q, PolicyNetwork
+from maddpg_epc.encoder import EntityEncoder, ObservationEncoder, EntityAttention, ObservationActionEncoder
+from maddpg_epc.maddpg import Q, PolicyNetwork
 import torch
 
 

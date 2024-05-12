@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maddpg_epc"
+dynamic = ["version"]
+requires-python = ">= 3.10"
+dependencies = [
+    "torch==2.2.2",
+    "numpy==1.26.4",
+    "matplotlib==3.8.3",
+    "pandas==2.2.1",
+    "pressureplate @ git+https://github.com/uoe-agents/pressureplate.git",
+    "pytest==8.1.1",
+    "pylint==3.1.0",
+    "tensorboard==2.16.2",
+]
+authors = [
+  {name = "Jonas Barth", email = "barth.2050678@studenti.uniroma1.it"}
+]
+description = "<project description>"
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["epc", "maddpg", "rl"]
+
+[project.optional-dependencies]
+dev = [
+    "yapf",
+    "pylint"
+]
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-html"
+]
+
+[tool.yapf]
+based_on_style = "google"
+column_limit = 100

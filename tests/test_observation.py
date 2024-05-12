@@ -1,6 +1,6 @@
 import torch
 
-from observation import Observation, get_visible_agent_observations, extract_observation_grids
+from maddpg_epc.observation import Observation, get_visible_agent_observations, extract_observation_grids
 
 
 def test_observation():

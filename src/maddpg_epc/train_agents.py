@@ -61,12 +61,16 @@ class TrainingAgents:
         # for keeping track of the current epoch number we train on
         self.epoch = 0
 
+        self.total_steps = 0
+        self.steps_update_interval = 100
+
+
     def initialize_agents(self):
         for i in range(self.num_agents):
-            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist).to(self.device)
+            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist, dim=256).to(self.device)
             q_function = Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
-            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist).to(self.device)
-            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist).to(self.device)
+            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
+            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
             self.agents.append({
                 'q_function': q_function, 
@@ -101,12 +105,14 @@ class TrainingAgents:
                     print(f"----ALL DONES: episode {episode} | step {step}----")
                     break
 
+                self.total_steps += 1
+
             self.tb_writer.add_scalar("Total Episode Reward", np.sum(episode_rewards), episode)
             print(f"Episode {episode} | Total Reward: {np.sum(episode_rewards)}")
             print(f"---------------------------------------------------------")
 
     def update_agents(self):
-        if len(self.replay_buffer) > self.batch_size:
+        if len(self.replay_buffer) > self.batch_size and self.total_steps % self.steps_update_interval == 0:
             experiences = random.sample(self.replay_buffer, self.batch_size)
             total_loss_critic = 0
             total_loss_actor = 0
