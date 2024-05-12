@@ -6,11 +6,10 @@ from this module.
 """
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
-from encoder import ObservationActionEncoder, EntityAttention, ObservationEncoder
-from observation import get_visible_agent_observations
+from maddpg_epc.encoder import ObservationActionEncoder, EntityAttention, ObservationEncoder
 
 
 class Q(nn.Module):

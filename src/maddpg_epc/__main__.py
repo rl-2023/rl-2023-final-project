@@ -1,7 +1,6 @@
-import torch
-from train_agents import TrainingAgents
-
 import argparse
+
+from maddpg_epc.train_agents import TrainingAgents
 
 
 def parse_arguments():

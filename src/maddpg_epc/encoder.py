@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from observation import extract_observation_grids
+from maddpg_epc.observation import extract_observation_grids
 
 
 class EntityEncoder(nn.Module):

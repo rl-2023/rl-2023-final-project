@@ -6,8 +6,8 @@ import numpy as np
 from collections import deque
 import random
 
-from encoder import ObservationActionEncoder
-from maddpg import Q, PolicyNetwork
+from maddpg_epc.encoder import ObservationActionEncoder
+from maddpg_epc.maddpg import Q, PolicyNetwork
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
