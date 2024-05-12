@@ -166,8 +166,12 @@ class PolicyNetwork(nn.Module):
         Returns:
             (torch.Tensor): the
         """
-        visible_observations = get_visible_agent_observations(observations=observation, agent=self.agent,
-                                                              sensor_range=self.max_dist_visibility)
+
+        # the observations visible to use are all the other agents' observations
+        num_agents = observation.shape[1]
+        other_agents = [other_agent for other_agent in range(num_agents) if other_agent != self.agent]
+        visible_observations = observation[:, other_agents]
+
         # maintain the agent dimension, we always want shape (batch, agent, dim)
         agent_observations = observation[:, self.agent].unsqueeze(1)
 

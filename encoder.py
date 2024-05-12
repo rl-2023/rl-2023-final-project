@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from observation import get_visible_agent_observations, extract_observation_grids
+from observation import extract_observation_grids
 
 
 class EntityEncoder(nn.Module):
@@ -262,8 +262,12 @@ class ObservationActionEncoder(nn.Module):
             raise ValueError(f"Action must have a batch dimension, found {action.dim()} dimensions.")
 
         action_encoded = self.action_encoder(action)
-        visible_observations = get_visible_agent_observations(observations=observation, agent=agent,
-                                                              sensor_range=self.max_dist_visibility)
+
+        # the observations visible to use are all the other agents' observations
+        num_agents = observation.shape[1]
+        other_agents = [other_agent for other_agent in range(num_agents) if other_agent != agent]
+        visible_observations = observation[:, other_agents]
+
         # maintain the agent dimension, we always want shape (batch, agent, dim)
         agent_observations = observation[:, agent].unsqueeze(1)
 
