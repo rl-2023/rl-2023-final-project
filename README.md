@@ -116,14 +116,24 @@ It can be summarized as follow:
 
 ![](doc/MADDPG.png)
 
-To run the training, execute:
+# How to run
 
+Install as a package
+```shell
+pip install -e .
+```
+
+Then execute
+```shell
+python -m maddpg_epc
+```
+
+Otherwise you can also do this to run the training, execute:
 ```shell
 python __main__.py
 ```
 
 The training algorithm logs to **tensorboard**, to start the tensorboard server:
-
 ```shell
 tensorboard --logdir=runs
 ```
