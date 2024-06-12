@@ -62,7 +62,7 @@ class TrainingAgents:
         self.epoch = 0
 
         self.total_steps = 0
-        self.steps_update_interval = 100
+        self.steps_update_interval = 1
 
 
     def initialize_agents(self):
@@ -129,6 +129,9 @@ class TrainingAgents:
                 loss_actor.backward()
                 agent['optimizer_policy_network'].step()
 
+                if self.verbose_train:
+                    print(f"    Loss Critic: {loss_critic} | Loss Actor: {loss_actor}")
+                    
                 self.tb_writer.add_scalar(f"critic/loss/agent_{i}", loss_critic, self.epoch)
                 self.tb_writer.add_scalar(f"actor/loss/agent_{i}", loss_actor, self.epoch)
 
@@ -136,7 +139,7 @@ class TrainingAgents:
             for agent in self.agents:
                 self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
             if self.verbose_train:
-                print(f"    Critic Loss: {total_loss_critic} | Actor Loss: {total_loss_actor}")
+                print(f"    Total Critic Loss: {total_loss_critic} | Total Actor Loss: {total_loss_actor}")
 
             # keep track of the training epochs because they are different from the steps and episodes
             self.epoch += 1
