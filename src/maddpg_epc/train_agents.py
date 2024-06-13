@@ -62,30 +62,42 @@ class TrainingAgents:
         self.epoch = 0
 
         self.total_steps = 0
-        self.steps_update_interval = self.batch_size
-
+        self.steps_update_interval = self.batch_size #TODO understand update frequency 
+        self.rendering = True
 
     def initialize_agents(self):
         for i in range(self.num_agents):
-            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist, dim=256).to(self.device)
+            #TODO check, here all the 25 were 256
+            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist, dim=25).to(self.device)
             q_function = Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
-            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
-            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
+            target_q_function=Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
+            target_q_function.load_state_dict(q_function.state_dict())
+            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=25).to(self.device)
+            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=25).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
             self.agents.append({
                 'q_function': q_function, 
+                'target_q_function': target_q_function,
                 'policy_network': policy_network, 
                 'target_policy_network': target_policy_network,
                 'optimizer_q_function': Adam(list(q_function.parameters()) , lr=self.learning_rate),
                 'optimizer_policy_network': Adam( list(policy_network.parameters()), lr=self.learning_rate)
             })
 
-    def new_rewards(self, reward):
+        print(f"Number of parameters for each agent")
+        print(f"POLICY: {sum(p.numel() for p in policy_network.parameters())} | Q: {sum(p.numel() for p in q_function.parameters())}")
+        
+    def new_rewards(self, reward, action):
+        final_reward=reward
         if reward == 0:
-            return 0.5
-        return reward
+            final_reward += 0.5
+            '''
+            if action == 4:
+                final_reward += 0.5            
+            '''
+        return final_reward
     
-    def train(self, rendering=True):
+    def train(self):
         for episode in range(self.episodes):
             if self.verbose_train:
                 print(f"Episode: {episode}")
@@ -94,11 +106,11 @@ class TrainingAgents:
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
-                if rendering:
+                if self.rendering:
                     self.env.render()
                 actions = [agent['policy_network'].forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)
-                rewards = [self.new_rewards(rewards[i]) for i in range(len(rewards))]
+                rewards = [self.new_rewards(rewards[i],actions[i]) for i in range(len(rewards))]
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
                 observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
@@ -148,7 +160,7 @@ class TrainingAgents:
             for agent in self.agents:
                 self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
                 #TODO understand if soft learn also for q network
-                #self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
+                self.target_network_update(agent['target_q_function'], agent['q_function'], self.tau)
             if self.verbose_train:
                 print(f"    Total Critic Loss: {total_loss_critic} | Total Actor Loss: {total_loss_actor}")
 
@@ -168,7 +180,7 @@ class TrainingAgents:
         num_agents=len(agents)
         q_function_i=agents[i]['q_function']
         target_policy_network=[{'target_policy_network':agents[j]['target_policy_network']} for j in range(num_agents)]
-
+        target_q_function_i=agents[i]['target_q_function']
         #__________________________________________________________________________________________________
         #TODO create function for replay buffer
         # Convert to tensors with the appropriate types
@@ -193,7 +205,7 @@ class TrainingAgents:
             
             # Compute the target Q-values
             #TODO check if correct implementation
-            target_q_values = rewards[:, i].unsqueeze(1) + gamma * q_function_i(next_observation_stack, next_actions_stack)  * (1-dones[:, i].unsqueeze(1)) 
+            target_q_values = rewards[:, i].unsqueeze(1) + gamma * target_q_function_i(next_observation_stack, next_actions_stack)  #TODO understand if we need done when an agent is in the plate* (1-dones[:, i].unsqueeze(1)) 
             
         # Compute the loss using Mean Squared Error between current and target Q-values
         loss_i = torch.mean((current_q_values - target_q_values) ** 2)
@@ -243,13 +255,13 @@ class TrainingAgents:
 
         #__________________________________________________________________________________________________
         #Computing the loss which have the minus because we want gradient ascent
-        actor_loss_i= -torch.mean(q_function_i(observation_stack, actions_stack)) 
+        actor_loss_i= torch.mean(q_function_i(observation_stack, actions_stack)) #TODO put again the - in front 
         #__________________________________________________________________________________________________
         if verbose:
             print(f"--------observation_stack: {observation_stack.shape}")   
             print(f"--------actions_stack: {actions_stack.shape}")
 
-        return actor_loss_i
+        return -actor_loss_i
 
     def target_network_update(self, target, main, tau):
         with torch.no_grad():
