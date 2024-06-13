@@ -62,7 +62,7 @@ class TrainingAgents:
         self.epoch = 0
 
         self.total_steps = 0
-        self.steps_update_interval = 1
+        self.steps_update_interval = 100
 
 
     def initialize_agents(self):
@@ -97,8 +97,9 @@ class TrainingAgents:
                 episode_rewards += rewards
                 if self.verbose_train:
                     print(f"  Step: {step}")
-                    print(f"    Rewards: {rewards} | Cumulative: {np.sum(episode_rewards)}")
                     print(f"    Actions: {actions}")
+                    print(f"    Rewards: {rewards} | Cumulative: {np.sum(episode_rewards)}")
+                    
                 self.update_agents()
 
                 if all(dones):
