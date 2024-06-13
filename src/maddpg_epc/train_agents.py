@@ -80,7 +80,12 @@ class TrainingAgents:
                 'optimizer_policy_network': Adam( list(policy_network.parameters()), lr=self.learning_rate)
             })
 
-    def train(self):
+    def new_rewards(self, reward):
+        if reward == 0:
+            return 1
+        return reward
+    
+    def train(self, rendering=True):
         for episode in range(self.episodes):
             if self.verbose_train:
                 print(f"Episode: {episode}")
@@ -89,8 +94,11 @@ class TrainingAgents:
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
+                if rendering:
+                    self.env.render()
                 actions = [agent['policy_network'].forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)
+                rewards = [self.new_rewards(rewards[i]) for i in range(len(rewards))]
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
                 observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
@@ -245,4 +253,5 @@ class TrainingAgents:
         with torch.no_grad():
             for param, target_param in zip(main.parameters(), target.parameters()):
                 target_param.data = tau * param.data + (1 - tau) * target_param.data
+
 
