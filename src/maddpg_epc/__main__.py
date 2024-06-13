@@ -9,8 +9,8 @@ def parse_arguments():
 
     # Environment parameters
     parser.add_argument('--num_agents', type=int, default=4, help='Number of agents')
-    parser.add_argument('--episodes', type=int, default=10**3, help='Number of episodes')
-    parser.add_argument('--steps_per_episode', type=int, default=10**4, help='Number of steps per episode')
+    parser.add_argument('--episodes', type=int, default=10**1, help='Number of episodes')
+    parser.add_argument('--steps_per_episode', type=int, default=10**8, help='Number of steps per episode')
     parser.add_argument('--batch_size', type=int, default=2**10, help='Batch size')
     parser.add_argument('--buffer_size', type=int, default=10**6, help='Replay buffer size')
 

@@ -62,7 +62,7 @@ class TrainingAgents:
         self.epoch = 0
 
         self.total_steps = 0
-        self.steps_update_interval = 100
+        self.steps_update_interval = self.batch_size
 
 
     def initialize_agents(self):
@@ -82,7 +82,7 @@ class TrainingAgents:
 
     def new_rewards(self, reward):
         if reward == 0:
-            return 1
+            return 0.5
         return reward
     
     def train(self, rendering=True):
@@ -147,6 +147,8 @@ class TrainingAgents:
 
             for agent in self.agents:
                 self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
+                #TODO understand if soft learn also for q network
+                #self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
             if self.verbose_train:
                 print(f"    Total Critic Loss: {total_loss_critic} | Total Actor Loss: {total_loss_actor}")
 
