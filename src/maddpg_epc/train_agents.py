@@ -11,6 +11,7 @@ from maddpg_epc.maddpg import Q, PolicyNetwork
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 class TrainingAgents:
     """
@@ -62,8 +63,8 @@ class TrainingAgents:
         self.epoch = 0
 
         self.total_steps = 0
-        self.steps_update_interval = self.batch_size #TODO understand update frequency 
-        self.rendering = True
+        self.steps_update_interval = 100 #TODO understand update frequency 
+        self.rendering = False
 
     def initialize_agents(self):
         for i in range(self.num_agents):
@@ -98,7 +99,7 @@ class TrainingAgents:
         return final_reward
     
     def train(self):
-        for episode in range(self.episodes):
+        for episode in tqdm(range(self.episodes)):
             if self.verbose_train:
                 print(f"Episode: {episode}")
             observation = self.env.reset()
@@ -106,7 +107,7 @@ class TrainingAgents:
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
-                if self.rendering:
+                if self.rendering and step > (self.steps_per_episode-100):
                     self.env.render()
                 actions = [agent['policy_network'].forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)

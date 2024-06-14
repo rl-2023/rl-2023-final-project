@@ -41,7 +41,7 @@ class Q(nn.Module):
         super().__init__()
         self.agent = agent
         self.observation_action_encoder = observation_action_encoder
-        self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=int(128/2))
+        self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=int(128))
 
         self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim, out_features=observation_action_encoder.dim)
         # TODO final is a two layer MLP
@@ -137,7 +137,7 @@ class PolicyNetwork(nn.Module):
                  observation_length: int,
                  max_dist_visibility: int,
                  dim: int = 512,
-                 attention_dim: int = int(128/2),
+                 attention_dim: int = int(128),
                  action_out_features: int = 5):
         super().__init__()
         self.agent = agent
