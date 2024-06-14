@@ -64,7 +64,7 @@ class TrainingAgents:
 
         self.total_steps = 0
         self.steps_update_interval = 100 #TODO understand update frequency 
-        self.rendering = False
+        self.rendering = True
 
     def initialize_agents(self):
         for i in range(self.num_agents):
@@ -87,16 +87,33 @@ class TrainingAgents:
 
         print(f"Number of parameters for each agent")
         print(f"POLICY: {sum(p.numel() for p in policy_network.parameters())} | Q: {sum(p.numel() for p in q_function.parameters())}")
-        
+
+  
+    '''
+    def new_rewards(self, reward, action):
+        if reward == -3:
+            return 0.0
+        elif reward == -2:
+            return 0.0
+        elif reward == -1:
+            return 0.0
+        elif reward > -1:
+            return np.exp(reward) #1+reward+reward**2/2+reward**3/3
+
+    '''
     def new_rewards(self, reward, action):
         final_reward=reward
         if reward == 0:
             final_reward += 0.5
-            '''
+            
             if action == 4:
                 final_reward += 0.5            
-            '''
-        return final_reward
+            
+            return final_reward
+        else:
+            return 0
+    
+
     
     def train(self):
         for episode in tqdm(range(self.episodes)):
@@ -107,11 +124,13 @@ class TrainingAgents:
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
-                if self.rendering and step > (self.steps_per_episode-100):
+                if self.rendering:
                     self.env.render()
                 actions = [agent['policy_network'].forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)
                 rewards = [self.new_rewards(rewards[i],actions[i]) for i in range(len(rewards))]
+                actions_stack=torch.Tensor(np.array(actions)).unsqueeze(0).to(self.device)
+                q_values=[agent['q_function'](observation_stack, actions_stack).item() for agent in self.agents]
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
                 observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
@@ -120,7 +139,7 @@ class TrainingAgents:
                     print(f"  Step: {step}")
                     print(f"    Actions: {actions}")
                     print(f"    Rewards: {rewards} | Cumulative: {np.sum(episode_rewards)}")
-                    
+                    print(f"    Q-values {q_values}")
                 self.update_agents()
 
                 if all(dones):
@@ -198,16 +217,15 @@ class TrainingAgents:
 
         #Computing the new actions for evaluation ot target_q_values 
         #TODO: understand if using with torch.no_grad() -> I think yes because it the target which usually is given 
-        with torch.no_grad():
-            next_actions=[]
-            for j in range(num_agents):
-                next_actions.append( target_policy_network[j]['target_policy_network'].forward(next_observation_stack).float())
-            next_actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in next_actions]).permute(1, 0, 2).to(self.device)
-            
-            # Compute the target Q-values
-            #TODO check if correct implementation
-            target_q_values = rewards[:, i].unsqueeze(1) + gamma * target_q_function_i(next_observation_stack, next_actions_stack)  #TODO understand if we need done when an agent is in the plate* (1-dones[:, i].unsqueeze(1)) 
-            
+        next_actions=[]
+        for j in range(num_agents):
+            next_actions.append( target_policy_network[j]['target_policy_network'].forward(next_observation_stack).float())
+        next_actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in next_actions]).permute(1, 0, 2).to(self.device)
+        
+        # Compute the target Q-values
+        #TODO check if correct implementation
+        target_q_values = rewards[:, i].unsqueeze(1) + gamma * target_q_function_i(next_observation_stack, next_actions_stack)  #TODO understand if we need done when an agent is in the plate* (1-dones[:, i].unsqueeze(1)) 
+        
         # Compute the loss using Mean Squared Error between current and target Q-values
         loss_i = torch.mean((current_q_values - target_q_values) ** 2)
 
@@ -265,8 +283,7 @@ class TrainingAgents:
         return -actor_loss_i
 
     def target_network_update(self, target, main, tau):
-        with torch.no_grad():
-            for param, target_param in zip(main.parameters(), target.parameters()):
-                target_param.data = tau * param.data + (1 - tau) * target_param.data
+        for param, target_param in zip(main.parameters(), target.parameters()):
+            target_param.data = tau * param.data + (1 - tau) * target_param.data
 
 
