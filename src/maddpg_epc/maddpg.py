@@ -17,8 +17,8 @@ class Q(nn.Module):
 
     The Q function estimates the discounted sum of expected rewards for a state-action pair. The function combines the
     embeddings of ObservationActionEncoder for each agent in the system, via an attention mechanism, and forwards them
-    through a fully connected layer to get a single Q-value. Each agent has an instance of this Q function, with a
-    single shared ObservationActionEncoder.
+    through a two-layer MLP to get a single Q-value. Each agent has an instance of this Q function, with a
+    single shared ObservationActionEncoder between functions.
 
     The input to the Q function should be a tensor of shape (batch_size, environment_dim), as well as a tensor of the
     action taken by the agent owning this Q function, shape (batch_size, action_dim).
@@ -43,8 +43,10 @@ class Q(nn.Module):
         self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=128)
 
         self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim, out_features=observation_action_encoder.dim)
-        # TODO final is a two layer MLP
-        self.fc_final = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=1)
+
+        self.fc_final_1 = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=2 * observation_action_encoder.dim)
+        self.fc_final_2 = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=1)
+
 
     def forward(self, observation: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         """Calculates the Q-value for the given observation-action pair.
@@ -113,7 +115,7 @@ class Q(nn.Module):
         oa_embeddings_vector = torch.cat((agent_fc, other_agent_oa_embeddings), dim=-1)
 
         # add final FC layer that outputs Q-value
-        q_value = self.fc_final(oa_embeddings_vector)
+        q_value = self.fc_final_2(self.fc_final_1(oa_embeddings_vector))
 
         return q_value
 
@@ -212,7 +214,7 @@ class PolicyNetwork(nn.Module):
         action_probabilities = F.softmax(actions, dim=1)        
         '''
         #applying gumbel softmax activation function to convert logits to probabilities
-        action_probabilities = F.gumbel_softmax(actions, tau=1, hard=False, eps=1e-10, dim=1)
+        action_probabilities = F.gumbel_softmax(actions, tau=0.5, hard=False, eps=1e-10, dim=1)
 
         # Get the predicted class for each sample in the batch
         predicted_actions = torch.argmax(action_probabilities, dim=1, keepdim=True)
