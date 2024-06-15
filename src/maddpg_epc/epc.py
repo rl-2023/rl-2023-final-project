@@ -1,0 +1,1 @@
+"""Runs the evolutionary population curriculum algorithm using the maddpg algorithm."""
