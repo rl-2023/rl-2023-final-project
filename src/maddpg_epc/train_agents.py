@@ -1,16 +1,18 @@
+import random
+from collections import deque
+from collections import namedtuple
+
 import gym
+import numpy as np
 import pressureplate
 import torch
-from torch.optim import Adam
-import numpy as np
-from collections import deque
-import random
 
 from maddpg_epc.encoder import ObservationActionEncoder
 from maddpg_epc.maddpg import Q, PolicyNetwork
-
-import torch
+from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
+
+Agent = namedtuple("Agent", ["q_function", "policy_network", "target_policy_network", "optimizer_q_function", "optimizer_policy_network"])
 
 class TrainingAgents:
     """
@@ -67,18 +69,16 @@ class TrainingAgents:
 
     def initialize_agents(self):
         for i in range(self.num_agents):
-            oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist, dim=256).to(self.device)
+            oa_encoder = ObservationActionEncoder(observation_length=self.observation_length, dim=256).to(self.device)
             q_function = Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
             policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
             target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
-            self.agents.append({
-                'q_function': q_function, 
-                'policy_network': policy_network, 
-                'target_policy_network': target_policy_network,
-                'optimizer_q_function': Adam(list(q_function.parameters()) , lr=self.learning_rate),
-                'optimizer_policy_network': Adam( list(policy_network.parameters()), lr=self.learning_rate)
-            })
+            self.agents.append(Agent(q_function,
+                                     policy_network,
+                                     target_policy_network,
+                                     Adam(list(q_function.parameters()) , lr=self.learning_rate),
+                                     Adam( list(policy_network.parameters()), lr=self.learning_rate)))
 
     def train(self):
         for episode in range(self.episodes):
@@ -89,7 +89,7 @@ class TrainingAgents:
             episode_rewards = np.zeros(self.num_agents)
 
             for step in range(self.steps_per_episode):
-                actions = [agent['policy_network'].forward(observation_stack).item() for agent in self.agents]
+                actions = [agent.policy_network.forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
@@ -117,24 +117,24 @@ class TrainingAgents:
             total_loss_critic = 0
             total_loss_actor = 0
             for i, agent in enumerate(self.agents):
-                agent['optimizer_q_function'].zero_grad()
+                agent.optimizer_q_function.zero_grad()
                 loss_critic = self.critic_loss(experiences, self.agents, i, self.gamma).to(self.device)
                 total_loss_critic += loss_critic.item()
                 loss_critic.backward()
-                agent['optimizer_q_function'].step()
+                agent.optimizer_q_function.step()
 
-                agent['optimizer_policy_network'].zero_grad()
+                agent.optimizer_policy_network.zero_grad()
                 loss_actor = self.actor_loss(experiences, self.agents, i).to(self.device)
                 total_loss_actor += loss_actor.item()
                 loss_actor.backward()
-                agent['optimizer_policy_network'].step()
+                agent.optimizer_policy_network.step()
 
                 self.tb_writer.add_scalar(f"critic/loss/agent_{i}", loss_critic, self.epoch)
                 self.tb_writer.add_scalar(f"actor/loss/agent_{i}", loss_actor, self.epoch)
 
 
             for agent in self.agents:
-                self.target_network_update(agent['target_policy_network'], agent['policy_network'], self.tau)
+                self.target_network_update(agent.target_policy_network, agent.policy_network, self.tau)
             if self.verbose_train:
                 print(f"    Critic Loss: {total_loss_critic} | Actor Loss: {total_loss_actor}")
 
@@ -152,8 +152,8 @@ class TrainingAgents:
         observation, actions, rewards, next_observation, dones = zip(*experiences)
 
         num_agents=len(agents)
-        q_function_i=agents[i]['q_function']
-        target_policy_network=[{'target_policy_network':agents[j]['target_policy_network']} for j in range(num_agents)]
+        q_function_i=agents[i].q_function
+        target_policy_network=[{'target_policy_network':agents[j].target_policy_network} for j in range(num_agents)]
 
         #__________________________________________________________________________________________________
         #TODO create function for replay buffer
@@ -174,7 +174,7 @@ class TrainingAgents:
         with torch.no_grad():
             next_actions=[]
             for j in range(num_agents):
-                next_actions.append( target_policy_network[j]['target_policy_network'].forward(next_observation_stack).float())
+                next_actions.append( target_policy_network[j].target_policy_network.forward(next_observation_stack).float())
             next_actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in next_actions]).permute(1, 0, 2).to(self.device)
             
             # Compute the target Q-values
@@ -207,8 +207,8 @@ class TrainingAgents:
         observation, actions_, rewards_, next_observation_, dones_ = zip(*experiences)
 
         num_agents=len(agents)
-        q_function_i=agents[i]['q_function']
-        policy_network=[{'policy_network':agents[j]['policy_network']} for j in range(num_agents)]
+        q_function_i=agents[i].q_function
+        policy_network=[{'policy_network':agents[j].policy_network} for j in range(num_agents)]
 
         #__________________________________________________________________________________________________
         #TODO create function for replay buffer
@@ -224,7 +224,7 @@ class TrainingAgents:
         #TODO: understand if using with.torch_no_grad()
         actions=[]
         for j in range(num_agents):
-            actions.append( policy_network[j]['policy_network'].forward(observation_stack).float())
+            actions.append( policy_network[j].policy_network.forward(observation_stack).float())
         actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in actions]).permute(1, 0, 2).to(self.device)
 
         #__________________________________________________________________________________________________

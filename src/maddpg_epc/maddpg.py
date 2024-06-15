@@ -56,7 +56,7 @@ class Q(nn.Module):
         observation and action for each agent. Following, we calculate attention scores between the OA embedding of the
         agent owning this Q-function and the other OA embeddings. The other embeddings are then weighed using these
         scores and summed. Finally, we concatenate this weighted sum with the agent embedding that has been forwarded
-        through another fully connected layer, and feed it through a final fully connected layer that outputs the
+        through another fully connected layer, and feed it through a fully connected two-layer MLP that outputs the
         Q-value.
 
         Args:
