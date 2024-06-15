@@ -75,7 +75,8 @@ class ObservationEncoder(nn.Module):
         self.plates_encoder = EntityEncoder(in_features=observation_length, out_features=dim)
         self.doors_encoder = EntityEncoder(in_features=observation_length, out_features=dim)
         self.goal_encoder = EntityEncoder(in_features=observation_length, out_features=dim)
-        self.position_encoder = EntityEncoder(in_features=2, out_features=dim)  # this is the agent representation
+        self.position_encoder = EntityEncoder(in_features=2,
+                                              out_features=dim)  # this is the agent representation
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Encodes the provided observation.
@@ -97,7 +98,8 @@ class ObservationEncoder(nn.Module):
             observation = observation.unsqueeze(0)
 
         # the grids will have dimensions (batch, agents, grid side length)
-        agent_grids, plates_grids, doors_grids, goals_grids, coordinates = extract_observation_grids(observation)
+        agent_grids, plates_grids, doors_grids, goals_grids, coordinates = extract_observation_grids(
+            observation)
 
         # encode the different observation grids, encoder receives a stack of grids
         agent_encoded = self.agent_encoder(agent_grids)
@@ -107,7 +109,9 @@ class ObservationEncoder(nn.Module):
         coordinates_encoded = self.position_encoder(coordinates)
 
         # we return tensor (batch, entity, agent, encoding dim)
-        return torch.stack((coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded), dim=1)
+        return torch.stack(
+            (coordinates_encoded, agent_encoded, plates_encoded, doors_encoded, goals_encoded),
+            dim=1)
 
 
 class EntityAttention(nn.Module):
@@ -144,7 +148,8 @@ class EntityAttention(nn.Module):
 
         return attn_inner_product
 
-    def forward(self, agent_observation: torch.Tensor, visible_observations: torch.Tensor) -> torch.Tensor:
+    def forward(self, agent_observation: torch.Tensor,
+                visible_observations: torch.Tensor) -> torch.Tensor:
         """Calculate the entity attention scores between the agents' observation and the visible observations of other
         agents.
 
@@ -158,12 +163,14 @@ class EntityAttention(nn.Module):
             (torch.Tensor): The attention weights for the visible observations, in shape (batch_size, entity, agent)
         """
         if agent_observation.dim() != 4:
-            raise ValueError(f"Expected agent observation to be 4D tensor of shape (batch_size, entity, agent, "
-                             f"observation_dim), but got {visible_observations.dim()} instead.")
+            raise ValueError(
+                f"Expected agent observation to be 4D tensor of shape (batch_size, entity, agent, "
+                f"observation_dim), but got {visible_observations.dim()} instead.")
 
         if visible_observations.dim() != 4:
-            raise ValueError(f"Expected visible observations to be 4D tensor of shape (batch_size, entity, agent, "
-                             f"observation_dim), but got {visible_observations.dim()} instead.")
+            raise ValueError(
+                f"Expected visible observations to be 4D tensor of shape (batch_size, entity, agent, "
+                f"observation_dim), but got {visible_observations.dim()} instead.")
 
         # for each entity, calculate the attention between the agent that owns this OA encoder, and all the other agents
         num_entities = agent_observation.shape[1]
@@ -176,7 +183,8 @@ class EntityAttention(nn.Module):
             betas_entity = []
             for j in range(num_visible_agents):
                 # make sure that the visible observations have shape (batch, agent, dim)
-                beta_i_j = self._attention(agent_observation[:, i], visible_observations[:, i, j].unsqueeze(1))
+                beta_i_j = self._attention(agent_observation[:, i],
+                                           visible_observations[:, i, j].unsqueeze(1))
                 betas_entity.append(beta_i_j)
 
             # at this stage, betas_entity contains all non-softmaxed attention scores for a given entity
@@ -222,7 +230,8 @@ class ObservationActionEncoder(nn.Module):
         oa_encoder(agent, observation, action)
     """
 
-    def __init__(self, observation_length: int,
+    def __init__(self,
+                 observation_length: int,
                  dim: int = 512,
                  attention_dim: int = 128,
                  action_in_features: int = 1):
@@ -256,7 +265,8 @@ class ObservationActionEncoder(nn.Module):
             (torch.Tensor): the embedding of the observation and action.
         """
         if action.dim() != 2:
-            raise ValueError(f"Action must have a batch dimension, found {action.dim()} dimensions.")
+            raise ValueError(
+                f"Action must have a batch dimension, found {action.dim()} dimensions.")
 
         action_encoded = self.action_encoder(action)
 

@@ -51,7 +51,6 @@ def extract_observation_grids(observation: torch.Tensor):
     # reshape so that we have the 4 grids separated
     grids = observation[:, :, :-2].reshape(observation.shape[0], observation.shape[1], 4, -1)
 
-
     agent_grid = grids[:, :, 0]
     plates_grid = grids[:, :, 1]
     doors_grid = grids[:, :, 2]
@@ -61,7 +60,8 @@ def extract_observation_grids(observation: torch.Tensor):
     return agent_grid, plates_grid, doors_grid, goals_grid, coordinates
 
 
-def get_visible_agent_observations(observations: torch.Tensor, agent: int, sensor_range: int) -> torch.Tensor:
+def get_visible_agent_observations(observations: torch.Tensor, agent: int,
+                                   sensor_range: int) -> torch.Tensor:
     """Returns the observations of the agents visible to the given agent.
 
     Checks which agents are visible to the provided agent and returns their observations. The observations of the agent

@@ -42,11 +42,12 @@ class Q(nn.Module):
         self.observation_action_encoder = observation_action_encoder
         self.attention = EntityAttention(observation_action_encoder.dim, attention_dim=128)
 
-        self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim, out_features=observation_action_encoder.dim)
+        self.fc_agent = nn.Linear(in_features=observation_action_encoder.dim,
+                                  out_features=observation_action_encoder.dim)
 
-        self.fc_final_1 = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=2 * observation_action_encoder.dim)
+        self.fc_final_1 = nn.Linear(in_features=2 * observation_action_encoder.dim,
+                                    out_features=2 * observation_action_encoder.dim)
         self.fc_final_2 = nn.Linear(in_features=2 * observation_action_encoder.dim, out_features=1)
-
 
     def forward(self, observation: torch.Tensor, actions: torch.Tensor) -> torch.Tensor:
         """Calculates the Q-value for the given observation-action pair.
@@ -95,7 +96,8 @@ class Q(nn.Module):
         # combine the OA embeddings using attention, again we unsqueeze because the attention class I wrote requires
         # an entity dimension that we usually calculate the attention across, here all agents can be considered the
         # same entity, so it is a dummy dimension
-        attn_weights = self.attention(agent_oa_embedding.unsqueeze(1), other_agent_oa_embeddings.unsqueeze(1))
+        attn_weights = self.attention(agent_oa_embedding.unsqueeze(1),
+                                      other_agent_oa_embeddings.unsqueeze(1))
 
         # the attention weights come in the shape (batch_size, entity, agents), but in this case we need them as
         # (batch_size, agents, 1) so that we can easily multiply them with the OA embeddings
@@ -134,7 +136,8 @@ class PolicyNetwork(nn.Module):
         action_out_features (int): The dimension of the action output vectors.
     """
 
-    def __init__(self, agent: int,
+    def __init__(self,
+                 agent: int,
                  observation_length: int,
                  dim: int = 512,
                  attention_dim: int = 128,
@@ -168,7 +171,9 @@ class PolicyNetwork(nn.Module):
 
         # the observations visible to use are all the other agents' observations
         num_agents = observation.shape[1]
-        other_agents = [other_agent for other_agent in range(num_agents) if other_agent != self.agent]
+        other_agents = [
+            other_agent for other_agent in range(num_agents) if other_agent != self.agent
+        ]
         visible_observations = observation[:, other_agents]
 
         # maintain the agent dimension, we always want shape (batch, agent, dim)
@@ -206,7 +211,6 @@ class PolicyNetwork(nn.Module):
 
         # get the values for all the actions
         actions = self.fc_final(obs_flattened)
-
         '''
         # Apply softmax activation function to convert logits to probabilities
         action_probabilities = F.softmax(actions, dim=1)        
