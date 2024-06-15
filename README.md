@@ -123,7 +123,30 @@ Install as a package
 pip install -e .
 ```
 
-Then execute
+The module has the following parameters, all with default values.
+``` 
+MADDPG RL Parameters
+
+options:
+  -h, --help            show this help message and exit
+  --num_agents NUM_AGENTS
+                        Number of agents (default: 4)
+  --episodes EPISODES   Number of episodes (default: 1000)
+  --steps_per_episode STEPS_PER_EPISODE
+                        Number of steps per episode (default: 100)
+  --batch_size BATCH_SIZE
+                        Batch size (default: 1024)
+  --buffer_size BUFFER_SIZE
+                        Replay buffer size (default: 1000000)
+  --learning_rate LEARNING_RATE
+                        Learning rate (default: 0.01)
+  --gamma GAMMA         Discount factor (default: 0.95)
+  --tau TAU             Soft update parameter (default: 0.01)
+  --verbose             Print training progress (default: False)
+  --render              Render the environment after each step (default: False)
+```
+
+To execute the module with default values, do: 
 ```shell
 python -m maddpg_epc
 ```

@@ -27,7 +27,8 @@ class TrainingAgents:
                  learning_rate: float = 0.01, 
                  gamma: float = 0.95, 
                  tau: float = 0.1,
-                 verbose_train: bool = True):
+                 verbose_train: bool = True,
+                 render: bool = False):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.num_agents = num_agents
         self.episodes = episodes
@@ -37,7 +38,8 @@ class TrainingAgents:
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.tau = tau
-        self.verbose_train=verbose_train
+        self.verbose_train = verbose_train
+        self.render = render
         #pressureplate
         self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
         observation_shape = self.env.observation_space.spaces[0].shape[0]
@@ -91,6 +93,8 @@ class TrainingAgents:
             for step in range(self.steps_per_episode):
                 actions = [agent.policy_network.forward(observation_stack).item() for agent in self.agents]
                 next_observation, rewards, dones, _ = self.env.step(actions)
+                if self.render:
+                    self.env.render()
                 self.replay_buffer.append((observation, actions, rewards, next_observation, dones))
                 observation = next_observation
                 observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)

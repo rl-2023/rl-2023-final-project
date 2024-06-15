@@ -4,7 +4,8 @@ from maddpg_epc.train_agents import TrainingAgents
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='MADDPG RL Parameters')
+    parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # Environment parameters
     parser.add_argument('--num_agents', type=int, default=4, help='Number of agents')
@@ -23,6 +24,7 @@ def parse_arguments():
 
     # Verbosity
     parser.add_argument('--verbose', action='store_true', help='Print training progress')
+    parser.add_argument('--render', action='store_true', help='Render the environment after each step')
 
     return parser.parse_args()
 
@@ -42,6 +44,7 @@ if __name__ == '__main__':
                                      learning_rate=args.learning_rate,
                                      gamma=args.gamma,
                                      tau=args.tau,
-                                     verbose_train=args.verbose)  #.to(self.device)
+                                     verbose_train=args.verbose,
+                                     render=args.render)  #.to(self.device)
 
     training_agents.train()
