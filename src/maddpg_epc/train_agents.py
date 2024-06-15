@@ -69,8 +69,8 @@ class TrainingAgents:
         for i in range(self.num_agents):
             oa_encoder = ObservationActionEncoder(self.observation_length, self.env.unwrapped.max_dist, dim=256).to(self.device)
             q_function = Q(agent=i, observation_action_encoder=oa_encoder).to(self.device)
-            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
-            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, max_dist_visibility=self.env.unwrapped.max_dist, dim=256).to(self.device)
+            policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
+            target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
             self.agents.append({
                 'q_function': q_function, 

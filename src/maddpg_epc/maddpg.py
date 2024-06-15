@@ -29,7 +29,7 @@ class Q(nn.Module):
 
     Example usage:
         agent = 0
-        oa_encoder = ObservationActionEncoder(observation_length=25, max_dist_visibility=10, dim=256, attention_dim=128)
+        oa_encoder = ObservationActionEncoder(observation_length=25, dim=256, attention_dim=128)
         q = Q(agent=0, observation_action_encoder=oa_encoder)
         observation = torch.randn((8, 4, 102))
         actions = torch.Tensor([[0, 0, 0, 0, 0, 0, 0, 0] * 4]).reshape(8, -1)
@@ -136,13 +136,11 @@ class PolicyNetwork(nn.Module):
 
     def __init__(self, agent: int,
                  observation_length: int,
-                 max_dist_visibility: int,
                  dim: int = 512,
                  attention_dim: int = 128,
                  action_out_features: int = 5):
         super().__init__()
         self.agent = agent
-        self.max_dist_visibility = max_dist_visibility
         self.dim = dim
 
         self.observation_encoder = ObservationEncoder(observation_length, dim)

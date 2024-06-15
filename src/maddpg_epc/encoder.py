@@ -209,14 +209,13 @@ class ObservationActionEncoder(nn.Module):
 
     Args:
         observation_length (int): The length of a flattened 2D observation in the pressure plate environment.
-        max_dist_visibility (int): The maximum Manhattan distance that an agent can see.
         dim (int): the dimensionality of the final embedding.
         attention_dim (int): The dimensionality of the attention weights.
         action_in_features (int): The dimensionality of the action space, for the pressureplate environment actions are
         integers, hence the default is 1.
 
     Example Usage:
-        oa_encoder = ObservationActionEncoder(observation_length=25, max_dist_visibility=10, dim=256, attention_dim=128)
+        oa_encoder = ObservationActionEncoder(observation_length=25, dim=256, attention_dim=128)
         agent = 0
         observation = torch.randn((8, 4, 102))
         action = torch.Tensor([[0, 0, 0, 0, 0, 0, 0, 0]]).reshape(8, -1)
@@ -224,12 +223,10 @@ class ObservationActionEncoder(nn.Module):
     """
 
     def __init__(self, observation_length: int,
-                 max_dist_visibility: int,
                  dim: int = 512,
                  attention_dim: int = 128,
                  action_in_features: int = 1):
         super().__init__()
-        self.max_dist_visibility = max_dist_visibility
         self.dim = dim
 
         self.observation_encoder = ObservationEncoder(observation_length, dim)
