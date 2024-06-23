@@ -1,6 +1,6 @@
 import random
 from collections import deque
-from collections import namedtuple
+from dataclasses import dataclass
 
 import gym
 import numpy as np
@@ -12,7 +12,19 @@ from maddpg_epc.maddpg import Q, PolicyNetwork
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
-Agent = namedtuple("Agent", ["q_function", "policy_network", "target_policy_network", "optimizer_q_function", "optimizer_policy_network"])
+
+@dataclass
+class Agent:
+    q_function: Q
+    policy_network: PolicyNetwork
+    target_policy_network: PolicyNetwork
+    optimizer_q_function: Adam
+    optimizer_policy_network: Adam
+    rewards: []
+
+    def avg_rewards(self):
+        return np.mean(self.rewards)
+
 
 class TrainingAgents:
     """
@@ -80,13 +92,14 @@ class TrainingAgents:
                                      policy_network,
                                      target_policy_network,
                                      Adam(list(q_function.parameters()) , lr=self.learning_rate),
-                                     Adam( list(policy_network.parameters()), lr=self.learning_rate)))
+                                     Adam( list(policy_network.parameters()), lr=self.learning_rate),
+                                     role=0))
 
     def train(self):
         for episode in range(self.episodes):
             if self.verbose_train:
                 print(f"Episode: {episode}")
-            observation = self.env.reset()
+            observation, _ = self.env.reset()
             observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
             episode_rewards = np.zeros(self.num_agents)
 
@@ -99,6 +112,11 @@ class TrainingAgents:
                 observation = next_observation
                 observation_stack = torch.Tensor(np.array(observation)).unsqueeze(0).to(self.device)
                 episode_rewards += rewards
+
+                # each agent tracks their own episode rewards since we need them for the selection process of the EPC
+                for reward, agent in zip(rewards, self.agents):
+                    agent.rewards.append(reward)
+
                 if self.verbose_train:
                     print(f"  Step: {step}")
                     print(f"    Rewards: {rewards} | Cumulative: {np.sum(episode_rewards)}")
