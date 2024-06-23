@@ -73,8 +73,8 @@ class Crossover(EvolutionaryStage):
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         """Runs the crossover stage."""
-        agent_pairs = map(set, list(itertools.combinations_with_replacement(population, 2)))
-        agent_pairs = [(pairs[0] | pairs[1]) for pairs in agent_pairs]
+        agent_pairs = list(itertools.combinations_with_replacement(population, 2))
+        agent_pairs = [(pairs[0] + pairs[1]) for pairs in agent_pairs]
 
         c = kwargs.get('c')
         sampled_sets = random.sample(agent_pairs, c)
@@ -100,7 +100,7 @@ class Mutation(EvolutionaryStage):
         for training_agents, trained_agents in zip(training_agents, population):
             training_agents.agents = trained_agents
 
-        mutated_agents = train_agents_parallel(training_agents)
+        mutated_agents = train_agents_parallel(trained_agents)
 
         return [mutated_agents.agents for mutated_agents in mutated_agents]
 
@@ -112,17 +112,17 @@ class Selection(EvolutionaryStage):
     sets of size 2N.
     """
 
-    def __init__(self, name="Selection"):
+    def __init__(self, num_survivors: int, name="Selection"):
         super().__init__(name)
+        self.num_survivors = num_survivors
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         flat_agents = [agent for game in population for agent in game]
-        num_survivors = kwargs.get('num_survivors')
 
         agents_to_score = [(agent, agent.avg_rewards()) for agent in flat_agents]
         agents_to_score = sorted(agents_to_score, key=lambda x: x[1], reverse=True)
 
-        survivors = agents_to_score[:num_survivors]
+        survivors = agents_to_score[:self.num_survivors]
 
         return [survivor[0] for survivor in survivors]
 

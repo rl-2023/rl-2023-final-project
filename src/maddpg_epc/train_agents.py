@@ -93,7 +93,7 @@ class TrainingAgents:
                                      target_policy_network,
                                      Adam(list(q_function.parameters()) , lr=self.learning_rate),
                                      Adam( list(policy_network.parameters()), lr=self.learning_rate),
-                                     role=0))
+                                     rewards=[]))
 
     def train(self):
         for episode in range(self.episodes):
