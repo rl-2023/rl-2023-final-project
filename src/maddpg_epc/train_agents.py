@@ -88,11 +88,11 @@ class TrainingAgents:
             policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
             target_policy_network = PolicyNetwork(agent=i, observation_length=self.observation_length, dim=256).to(self.device)
             target_policy_network.load_state_dict(policy_network.state_dict())
-            self.agents.append(Agent(q_function,
-                                     policy_network,
-                                     target_policy_network,
-                                     Adam(list(q_function.parameters()) , lr=self.learning_rate),
-                                     Adam( list(policy_network.parameters()), lr=self.learning_rate),
+            self.agents.append(Agent(q_function=q_function,
+                                     policy_network=policy_network,
+                                     target_policy_network=target_policy_network,
+                                     optimizer_q_function=Adam(list(q_function.parameters()) , lr=self.learning_rate),
+                                     optimizer_policy_network=Adam( list(policy_network.parameters()), lr=self.learning_rate),
                                      rewards=[]))
 
     def train(self):
@@ -196,7 +196,7 @@ class TrainingAgents:
         with torch.no_grad():
             next_actions=[]
             for j in range(num_agents):
-                next_actions.append( target_policy_network[j].target_policy_network.forward(next_observation_stack).float())
+                next_actions.append( self.agents[j].target_policy_network.forward(next_observation_stack).float())
             next_actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in next_actions]).permute(1, 0, 2).to(self.device)
             
             # Compute the target Q-values
@@ -246,7 +246,7 @@ class TrainingAgents:
         #TODO: understand if using with.torch_no_grad()
         actions=[]
         for j in range(num_agents):
-            actions.append( policy_network[j].policy_network.forward(observation_stack).float())
+            actions.append( self.agents[j].policy_network.forward(observation_stack).float())
         actions_stack=torch.stack([torch.Tensor(act).to(self.device) for act in actions]).permute(1, 0, 2).to(self.device)
 
         #__________________________________________________________________________________________________
