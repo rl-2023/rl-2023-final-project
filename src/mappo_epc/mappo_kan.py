@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn
+from .KAN import KANLayer
 from torch import optim
 from torch.distributions.categorical import Categorical
 from dataclasses import dataclass
@@ -19,42 +20,41 @@ PPO original implementation from: https://colab.research.google.com/drive/1MsRlE
 
 youtube explanation: https://www.youtube.com/watch?v=HR8kQMTO8bk
 """
-# Policy and value model
+# Policy and value model with KAN layers
 class ActorCriticNetwork(nn.Module):
-  def __init__(self, obs_space_size, action_space_size):
-    super().__init__()
+    def __init__(self, obs_space_size, action_space_size):
+        super().__init__()
 
-    self.shared_layers = nn.Sequential(
-        nn.Linear(obs_space_size, 64),
-        nn.ReLU(),
-        nn.Linear(64, 64),
-        nn.ReLU())
-    
-    self.policy_layers = nn.Sequential(
-        nn.Linear(64, 64),
-        nn.ReLU(),
-        nn.Linear(64, action_space_size))
-    
-    self.value_layers = nn.Sequential(
-        nn.Linear(64, 64),
-        nn.ReLU(),
-        nn.Linear(64, 1))
-    
-  def value(self, obs):
-    z = self.shared_layers(obs)
-    value = self.value_layers(z)
-    return value
-        
-  def policy(self, obs):
-    z = self.shared_layers(obs)
-    policy_logits = self.policy_layers(z)
-    return policy_logits
+        self.shared_layers = nn.Sequential(
+            KANLayer(obs_space_size, 64*2).to(DEVICE), 
+            KANLayer(64*2, 64).to(DEVICE)
+        )
 
-  def forward(self, obs):
-    z = self.shared_layers(obs)
-    policy_logits = self.policy_layers(z)
-    value = self.value_layers(z)
-    return policy_logits, value
+        self.policy_layers = nn.Sequential(
+            #KANLayer(64, 64).to(DEVICE),
+            KANLayer(64, action_space_size).to(DEVICE)
+        )
+
+        self.value_layers = nn.Sequential(
+            #KANLayer(64*2, 64).to(DEVICE),
+            KANLayer(64, 1).to(DEVICE)
+        )
+
+    def value(self, obs):
+        z = self.shared_layers(obs)
+        value = self.value_layers(z)
+        return value
+
+    def policy(self, obs):
+        z = self.shared_layers(obs)
+        policy_logits = self.policy_layers(z)
+        return policy_logits
+
+    def forward(self, obs):
+        z = self.shared_layers(obs)
+        policy_logits = self.policy_layers(z)
+        value = self.value_layers(z)
+        return policy_logits, value
   
 class PPOTrainer():
   def __init__(self,
@@ -145,7 +145,7 @@ class Agent:
     def avg_rewards(self):
         return np.mean(self.rewards)
 
-def rollout(agents, env, max_steps=1000, render=True):
+def rollout(agents, env, max_steps=1000, render=False):
         train_data = [ [[], [], [], [], []] for _ in range(env.n_agents)] # obs, act, reward, values, act_log_probs
         obs, _ = env.reset()
         if render:
@@ -210,7 +210,8 @@ def parse_arguments():
     parser.add_argument('--num_agents', type=int, default=2, help='Number of agents')
     parser.add_argument('--num_episodes', type=int, default=1000, help='Number of episodes')
     parser.add_argument('--max_steps', type=int, default=100, help='Number of steps per episode')
-    parser.add_argument('--print_freq', type=int, default=10, help='Print frequence wrt episodes')
+    parser.add_argument('--render', action='store_true', help='Render the environment after each step')
+    parser.add_argument('--print_freq', type=int, default=1, help='Print frequence wrt episodes')
     return parser.parse_args()
 
 def main():
@@ -237,7 +238,7 @@ def main():
     ep_rewards = []
     for episode_idx in range(n_episodes):
         # Perform rollout
-        train_data, reward = rollout(agents, env, args.max_steps)
+        train_data, reward = rollout(agents, env, args.max_steps, render=args.render)
         ep_rewards.append(reward)
 
         for agent_idx in range(len(agents)):
