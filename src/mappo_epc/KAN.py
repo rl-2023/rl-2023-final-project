@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+
 def B_batch(x, grid, k=0, extend=True, device='cuda' if torch.cuda.is_available() else 'cpu'):
     '''
     evaludate x on B-spline bases
@@ -59,7 +60,7 @@ def B_batch(x, grid, k=0, extend=True, device='cuda' if torch.cuda.is_available(
     else:
         B_km1 = B_batch(x[:, 0], grid=grid[:, :, 0], k=k - 1, extend=False, device=device)
         value = (x - grid[:, :-(k + 1)]) / (grid[:, k:-1] - grid[:, :-(k + 1)]) * B_km1[:, :-1] + (
-                    grid[:, k + 1:] - x) / (grid[:, k + 1:] - grid[:, 1:(-k)]) * B_km1[:, 1:]
+            grid[:, k + 1:] - x) / (grid[:, k + 1:] - grid[:, 1:(-k)]) * B_km1[:, 1:]
     return value
 
 
@@ -136,9 +137,11 @@ def curve2coef(x_eval, y_eval, grid, k, device='cuda' if torch.cuda.is_available
     # x_eval: (size, batch); y_eval: (size, batch); grid: (size, grid); k: scalar
     mat = B_batch(x_eval, grid, k, device=device).permute(0, 2, 1)
     # coef = torch.linalg.lstsq(mat, y_eval.unsqueeze(dim=2)).solution[:, :, 0]
-    coef = torch.linalg.lstsq(mat.to(device), y_eval.unsqueeze(dim=2).to(device),
+    coef = torch.linalg.lstsq(mat.to(device),
+                              y_eval.unsqueeze(dim=2).to(device),
                               driver='gelsy' if device == 'cpu' else 'gels').solution[:, :, 0]
     return coef.to(device)
+
 
 class KANLayer(nn.Module):
     """
@@ -198,7 +201,20 @@ class KANLayer(nn.Module):
             unlock already locked activation functions
     """
 
-    def __init__(self, in_dim=3, out_dim=2, num=5, k=3, noise_scale=0.1, scale_base=1.0, scale_sp=1.0, base_fun=torch.nn.SiLU(), grid_eps=0.02, grid_range=[-1, 1], sp_trainable=True, sb_trainable=True, device='cuda' if torch.cuda.is_available() else 'cpu'):
+    def __init__(self,
+                 in_dim=3,
+                 out_dim=2,
+                 num=5,
+                 k=3,
+                 noise_scale=0.1,
+                 scale_base=1.0,
+                 scale_sp=1.0,
+                 base_fun=torch.nn.SiLU(),
+                 grid_eps=0.02,
+                 grid_range=[-1, 1],
+                 sp_trainable=True,
+                 sb_trainable=True,
+                 device='cuda' if torch.cuda.is_available() else 'cpu'):
         ''''
         initialize a KANLayer
         
@@ -242,7 +258,7 @@ class KANLayer(nn.Module):
         (3, 5)
         '''
         super(KANLayer, self).__init__()
-        # size 
+        # size
         self.size = size = out_dim * in_dim
         self.out_dim = out_dim
         self.in_dim = in_dim
@@ -250,17 +266,24 @@ class KANLayer(nn.Module):
         self.k = k
 
         # shape: (size, num)
-        self.grid = torch.einsum('i,j->ij', torch.ones(size, device=device), torch.linspace(grid_range[0], grid_range[1], steps=num + 1, device=device))
+        self.grid = torch.einsum(
+            'i,j->ij', torch.ones(size, device=device),
+            torch.linspace(grid_range[0], grid_range[1], steps=num + 1, device=device))
         self.grid = torch.nn.Parameter(self.grid).requires_grad_(False)
         noises = (torch.rand(size, self.grid.shape[1]) - 1 / 2) * noise_scale / num
         noises = noises.to(device)
         # shape: (size, coef)
         self.coef = torch.nn.Parameter(curve2coef(self.grid, noises, self.grid, k, device))
         if isinstance(scale_base, float):
-            self.scale_base = torch.nn.Parameter(torch.ones(size, device=device) * scale_base).requires_grad_(sb_trainable)  # make scale trainable
+            self.scale_base = torch.nn.Parameter(torch.ones(size, device=device) *
+                                                 scale_base).requires_grad_(
+                                                     sb_trainable)  # make scale trainable
         else:
-            self.scale_base = torch.nn.Parameter(torch.FloatTensor(scale_base).to(device)).requires_grad_(sb_trainable)
-        self.scale_sp = torch.nn.Parameter(torch.ones(size, device=device) * scale_sp).requires_grad_(sp_trainable)  # make scale trainable
+            self.scale_base = torch.nn.Parameter(
+                torch.FloatTensor(scale_base).to(device)).requires_grad_(sb_trainable)
+        self.scale_sp = torch.nn.Parameter(torch.ones(size, device=device) *
+                                           scale_sp).requires_grad_(
+                                               sp_trainable)  # make scale trainable
         self.base_fun = base_fun
 
         self.mask = torch.nn.Parameter(torch.ones(size, device=device)).requires_grad_(False)
@@ -304,10 +327,16 @@ class KANLayer(nn.Module):
 
         batch = x.shape[0]
         # x: shape (batch, in_dim) => shape (size, batch) (size = out_dim * in_dim)
-        x = torch.einsum('ij,k->ikj', x, torch.ones(self.out_dim, device=self.device)).reshape(batch, self.size).permute(1, 0)
+        x = torch.einsum('ij,k->ikj', x,
+                         torch.ones(self.out_dim,
+                                    device=self.device)).reshape(batch, self.size).permute(1, 0)
         preacts = x.permute(1, 0).clone().reshape(batch, self.out_dim, self.in_dim)
         base = self.base_fun(x).permute(1, 0)  # shape (batch, size)
-        y = coef2curve(x_eval=x, grid=self.grid[self.weight_sharing], coef=self.coef[self.weight_sharing], k=self.k, device=self.device)  # shape (size, batch)
+        y = coef2curve(x_eval=x,
+                       grid=self.grid[self.weight_sharing],
+                       coef=self.coef[self.weight_sharing],
+                       k=self.k,
+                       device=self.device)  # shape (size, batch)
         y = y.permute(1, 0)  # shape (batch, size)
         postspline = y.clone().reshape(batch, self.out_dim, self.in_dim)
         y = self.scale_base.unsqueeze(dim=0) * base + self.scale_sp.unsqueeze(dim=0) * y
@@ -317,7 +346,7 @@ class KANLayer(nn.Module):
         # y shape: (batch, out_dim); preacts shape: (batch, in_dim, out_dim)
         # postspline shape: (batch, in_dim, out_dim); postacts: (batch, in_dim, out_dim)
         # postspline is for extension; postacts is for visualization
-        return y #, preacts, postacts, postspline
+        return y  #, preacts, postacts, postspline
 
     def update_grid_from_samples(self, x):
         '''
@@ -343,14 +372,22 @@ class KANLayer(nn.Module):
         tensor([[-3.0002, -1.7882, -0.5763,  0.6357,  1.8476,  3.0002]])
         '''
         batch = x.shape[0]
-        x = torch.einsum('ij,k->ikj', x, torch.ones(self.out_dim, ).to(self.device)).reshape(batch, self.size).permute(1, 0)
+        x = torch.einsum('ij,k->ikj', x,
+                         torch.ones(self.out_dim,).to(self.device)).reshape(batch,
+                                                                            self.size).permute(
+                                                                                1, 0)
         x_pos = torch.sort(x, dim=1)[0]
         y_eval = coef2curve(x_pos, self.grid, self.coef, self.k, device=self.device)
         num_interval = self.grid.shape[1] - 1
         ids = [int(batch / num_interval * i) for i in range(num_interval)] + [-1]
         grid_adaptive = x_pos[:, ids]
         margin = 0.01
-        grid_uniform = torch.cat([grid_adaptive[:, [0]] - margin + (grid_adaptive[:, [-1]] - grid_adaptive[:, [0]] + 2 * margin) * a for a in np.linspace(0, 1, num=self.grid.shape[1])], dim=1)
+        grid_uniform = torch.cat([
+            grid_adaptive[:, [0]] - margin +
+            (grid_adaptive[:, [-1]] - grid_adaptive[:, [0]] + 2 * margin) * a
+            for a in np.linspace(0, 1, num=self.grid.shape[1])
+        ],
+                                 dim=1)
         self.grid.data = self.grid_eps * grid_uniform + (1 - self.grid_eps) * grid_adaptive
         self.coef.data = curve2coef(x_pos, y_eval, self.grid, self.k, device=self.device)
 
@@ -384,9 +421,17 @@ class KANLayer(nn.Module):
         '''
         batch = x.shape[0]
         # preacts: shape (batch, in_dim) => shape (size, batch) (size = out_dim * in_dim)
-        x_eval = torch.einsum('ij,k->ikj', x, torch.ones(self.out_dim, ).to(self.device)).reshape(batch, self.size).permute(1, 0)
+        x_eval = torch.einsum('ij,k->ikj', x,
+                              torch.ones(self.out_dim,).to(self.device)).reshape(batch,
+                                                                                 self.size).permute(
+                                                                                     1, 0)
         x_pos = parent.grid
-        sp2 = KANLayer(in_dim=1, out_dim=self.size, k=1, num=x_pos.shape[1] - 1, scale_base=0., device=self.device)
+        sp2 = KANLayer(in_dim=1,
+                       out_dim=self.size,
+                       k=1,
+                       num=x_pos.shape[1] - 1,
+                       scale_base=0.,
+                       device=self.device)
         sp2.coef.data = curve2coef(sp2.grid, x_pos, sp2.grid, k=1, device=self.device)
         y_eval = coef2curve(x_eval, parent.grid, parent.coef, parent.k, device=self.device)
         percentile = torch.linspace(-1, 1, self.num + 1).to(self.device)
@@ -415,12 +460,22 @@ class KANLayer(nn.Module):
         >>> kanlayer_small.in_dim, kanlayer_small.out_dim
         (2, 3)
         '''
-        spb = KANLayer(len(in_id), len(out_id), self.num, self.k, base_fun=self.base_fun, device=self.device)
-        spb.grid.data = self.grid.reshape(self.out_dim, self.in_dim, spb.num + 1)[out_id][:, in_id].reshape(-1, spb.num + 1)
-        spb.coef.data = self.coef.reshape(self.out_dim, self.in_dim, spb.coef.shape[1])[out_id][:, in_id].reshape(-1, spb.coef.shape[1])
-        spb.scale_base.data = self.scale_base.reshape(self.out_dim, self.in_dim)[out_id][:, in_id].reshape(-1, )
-        spb.scale_sp.data = self.scale_sp.reshape(self.out_dim, self.in_dim)[out_id][:, in_id].reshape(-1, )
-        spb.mask.data = self.mask.reshape(self.out_dim, self.in_dim)[out_id][:, in_id].reshape(-1, )
+        spb = KANLayer(len(in_id),
+                       len(out_id),
+                       self.num,
+                       self.k,
+                       base_fun=self.base_fun,
+                       device=self.device)
+        spb.grid.data = self.grid.reshape(self.out_dim, self.in_dim,
+                                          spb.num + 1)[out_id][:, in_id].reshape(-1, spb.num + 1)
+        spb.coef.data = self.coef.reshape(self.out_dim, self.in_dim,
+                                          spb.coef.shape[1])[out_id][:, in_id].reshape(
+                                              -1, spb.coef.shape[1])
+        spb.scale_base.data = self.scale_base.reshape(self.out_dim,
+                                                      self.in_dim)[out_id][:, in_id].reshape(-1,)
+        spb.scale_sp.data = self.scale_sp.reshape(self.out_dim,
+                                                  self.in_dim)[out_id][:, in_id].reshape(-1,)
+        spb.mask.data = self.mask.reshape(self.out_dim, self.in_dim)[out_id][:, in_id].reshape(-1,)
 
         spb.in_dim = len(in_id)
         spb.out_dim = len(out_id)
@@ -457,7 +512,8 @@ class KANLayer(nn.Module):
         # ids: [[i1,j1],[i2,j2],[i3,j3],...]
         for i in range(len(ids)):
             if i != 0:
-                self.weight_sharing[ids[i][1] * self.in_dim + ids[i][0]] = ids[0][1] * self.in_dim + ids[0][0]
+                self.weight_sharing[ids[i][1] * self.in_dim +
+                                    ids[i][0]] = ids[0][1] * self.in_dim + ids[0][0]
             self.lock_id[ids[i][1] * self.in_dim + ids[i][0]] = self.lock_counter
 
     def unlock(self, ids):
@@ -491,11 +547,15 @@ class KANLayer(nn.Module):
         num = len(ids)
         locked = True
         for i in range(num):
-            locked *= (self.weight_sharing[ids[i][1] * self.in_dim + ids[i][0]] == self.weight_sharing[ids[0][1] * self.in_dim + ids[0][0]])
+            locked *= (
+                self.weight_sharing[ids[i][1] * self.in_dim +
+                                    ids[i][0]] == self.weight_sharing[ids[0][1] * self.in_dim +
+                                                                      ids[0][0]])
         if locked == False:
             print("they are not locked. unlock failed.")
             return 0
         for i in range(len(ids)):
-            self.weight_sharing[ids[i][1] * self.in_dim + ids[i][0]] = ids[i][1] * self.in_dim + ids[i][0]
+            self.weight_sharing[ids[i][1] * self.in_dim +
+                                ids[i][0]] = ids[i][1] * self.in_dim + ids[i][0]
             self.lock_id[ids[i][1] * self.in_dim + ids[i][0]] = 0
         self.lock_counter -= 1
