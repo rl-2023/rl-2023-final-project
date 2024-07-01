@@ -5,7 +5,7 @@ import itertools
 import random
 from typing import Iterable
 
-from mappo_epc.mappo import Agent
+from mappo_epc.mappo import Agent, Mappo
 
 # train K sets of N agents (single role or as many roles as pressure plates?)
 # scale each set from N to cN by copying the set, e.g. c=1.5 by the means of crossover
@@ -20,7 +20,11 @@ from mappo_epc.mappo import Agent
 # pick the top K agents
 
 
-def train_agents_parallel(agents: Iterable[TrainingAgents]):
+def train(train_agent: Mappo):
+    train_agent.run()
+
+
+def train_agents_parallel(agents: Iterable[Mappo]):
     """Runs the training for games in parallel.
 
     Args:
@@ -29,10 +33,6 @@ def train_agents_parallel(agents: Iterable[TrainingAgents]):
     Returns:
         Iterable[TrainingAgents]: The trained agents.
     """
-
-    def train(train_agent: TrainingAgents):
-        train_agent.train()
-
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = list(executor.map(train, agents))
 
@@ -96,7 +96,7 @@ class Mutation(EvolutionaryStage):
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         # create training agent classes and assign them the agents
         num_parallel_games = len(population)
-        training_agents = [TrainingAgents() for _ in range(num_parallel_games)]
+        training_agents = [Mappo(**kwargs) for _ in range(num_parallel_games)]
         for training_agents, trained_agents in zip(training_agents, population):
             training_agents.agents = trained_agents
 
@@ -130,13 +130,19 @@ class Selection(EvolutionaryStage):
 class Epc:
     """Runs the Evolutionary Population Curriculum Algorithm."""
 
-    def __init__(self, parallel_games: int, stages: Iterable[EvolutionaryStage]):
+    def __init__(self, parallel_games: int, stages: Iterable[EvolutionaryStage], num_agents: int, num_episodes: int,
+                 max_steps: int, render: bool, print_freq: int):
         self.parallel_games = parallel_games
         self.stages = stages
+        self.num_agents = num_agents
+        self.num_episodes = num_episodes
+        self.max_steps = max_steps
+        self.render = render
+        self.print_freq = print_freq
 
     def run(self) -> Iterable[Agent]:
         # as a first step, we just want to train the agents in the parallel games
-        training_agents = [TrainingAgents() for _ in range(self.parallel_games)]
+        training_agents = [Mappo(self.num_agents, self.num_episodes, self.max_steps, self.render, self.print_freq) for _ in range(self.parallel_games)]
 
         training_agents = train_agents_parallel(training_agents)
 

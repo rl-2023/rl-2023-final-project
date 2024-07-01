@@ -1,3 +1,5 @@
+from typing import Iterable
+
 import gym
 import pressureplate
 import matplotlib.pyplot as plt
@@ -70,7 +72,6 @@ class CriticNetwork(nn.Module):
         return value
 
     def forward(self, obs):
-
         attn_obs, _ = self.mha_v(obs, obs, obs)
         z = self.activation_v(self.linear_v(self.norm_v(obs + attn_obs)))
 
@@ -78,36 +79,44 @@ class CriticNetwork(nn.Module):
         return value
 
 
-class PPOTrainer():
+@dataclass
+class Agent:
+    actor: ActorNetwork
+    critic: CriticNetwork
+    reward: []
+
+    def avg_rewards(self):
+        return np.mean(self.rewards)
+
+
+class PPOTrainer:
 
     def __init__(self,
-                 ActorNetwork,
-                 CriticNetwork,
+                 agent: Agent,
                  ppo_clip_val=0.2,
                  target_kl_div=0.01,
                  max_policy_train_iters=40,
                  value_train_iters=40,
                  policy_lr=3e-4,
                  value_lr=1e-2):
-        self.ac = ActorNetwork
-        self.cr = CriticNetwork
+        self.agent = agent
         self.ppo_clip_val = ppo_clip_val
         self.target_kl_div = target_kl_div
         self.max_policy_train_iters = max_policy_train_iters
         self.value_train_iters = value_train_iters
 
-        policy_params = list(self.ac.mha.parameters()) + \
-            list(self.ac.norm.parameters()) + \
-            list(self.ac.linear.parameters()) + \
-            list(self.ac.activation.parameters()) + \
-            list(self.ac.policy_layers.parameters())
+        policy_params = list(self.agent.actor.mha.parameters()) + \
+                        list(self.agent.actor.norm.parameters()) + \
+                        list(self.agent.actor.linear.parameters()) + \
+                        list(self.agent.actor.activation.parameters()) + \
+                        list(self.agent.actor.policy_layers.parameters())
         self.policy_optim = optim.Adam(policy_params, lr=policy_lr)
 
-        value_params = list(self.cr.mha_v.parameters()) + \
-            list(self.cr.norm_v.parameters()) + \
-            list(self.cr.linear_v.parameters()) + \
-            list(self.cr.activation_v.parameters()) + \
-            list(self.cr.value_layers.parameters())
+        value_params = list(self.agent.critic.mha_v.parameters()) + \
+                       list(self.agent.critic.norm_v.parameters()) + \
+                       list(self.agent.critic.linear_v.parameters()) + \
+                       list(self.agent.critic.activation_v.parameters()) + \
+                       list(self.agent.critic.value_layers.parameters())
         self.value_optim = optim.Adam(value_params, lr=value_lr)
 
     def train_policy(self, obs, acts, old_log_probs, gaes):
@@ -116,7 +125,7 @@ class PPOTrainer():
 
             self.policy_optim.zero_grad()
 
-            new_logits = self.ac.policy(obs)
+            new_logits = self.agent.actor.policy(obs)
             new_logits = Categorical(logits=new_logits)
             new_log_probs = new_logits.log_prob(acts)
 
@@ -141,8 +150,8 @@ class PPOTrainer():
         for _ in range(self.value_train_iters):
             self.value_optim.zero_grad()
 
-            values = self.cr.value(obs)
-            value_loss = (returns - values)**2
+            values = self.agent.critic.value(obs)
+            value_loss = (returns - values) ** 2
             value_loss = value_loss.mean()
             loss_store.append(value_loss.item())
             value_loss.backward()
@@ -178,20 +187,9 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
     return np.array(gaes[::-1])
 
 
-@dataclass
-class Agent:
-    actor: ActorNetwork
-    #critic: CriticNetwork
-    ppo: PPOTrainer
-    reward: []
-
-    def avg_rewards(self):
-        return np.mean(self.rewards)
-
-
 def rollout(agents, critic_net, env, max_steps=1000, render=False):
     train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
-                 ]  # obs, act, reward, values, act_log_probs
+                  ]  # obs, act, reward, values, act_log_probs
     obs, _ = env.reset()
     if render:
         env.render()
@@ -209,7 +207,6 @@ def rollout(agents, critic_net, env, max_steps=1000, render=False):
         val = val.item()
 
         for agent_idx in range(len(agents)):
-
             logits = agents[agent_idx].actor(
                 torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
             act_distribution = Categorical(logits=logits)
@@ -268,82 +265,102 @@ def parse_arguments():
                         action='store_true',
                         help='Render the environment after each step')
     parser.add_argument('--print_freq', type=int, default=1, help='Print frequence wrt episodes')
+    parser.add_argument('--parallel_games', type=int, default=3, help='Print frequence wrt episodes')
     return parser.parse_args()
+
+
+class Mappo:
+
+    def __init__(self, num_agents, num_episodes, max_steps, render, print_freq):
+        self.num_agents = num_agents
+        self.num_episodes = num_episodes
+        self.max_steps = max_steps
+        self.render = render
+        self.print_freq = print_freq
+        self.agents = []
+        self.ppo_trainers = []
+
+        self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
+        self.critic_net = CriticNetwork(self.env.observation_space[0].shape[0], self.env.n_agents).to(DEVICE)
+
+        for agent_idx in range(self.num_agents):
+            actor_net = ActorNetwork(self.env.observation_space[0].shape[0], self.env.action_space[0].n).to(DEVICE)
+
+            agent = Agent(actor=actor_net, critic=self.critic_net, reward=[])
+            ppo = PPOTrainer(agent=agent,
+                             ppo_clip_val=0.2,
+                             policy_lr=0.002,
+                             value_lr=0.02,
+                             target_kl_div=0.02,
+                             max_policy_train_iters=10,
+                             value_train_iters=10)
+
+            self.agents.append(agent)
+            self.ppo_trainers.append(ppo)
+
+    def run(self):
+        n_episodes = self.num_episodes
+        print_freq = self.print_freq
+
+        # Training loop
+        ep_rewards = []
+
+        for episode_idx in range(n_episodes):
+            # Perform rollout
+            train_data, reward = rollout(self.agents, self.critic_net, self.env, self.max_steps, render=self.render)
+            ep_rewards.append(reward)
+            returns_ = []
+            obs_ = []
+            for agent_idx in range(len(self.agents)):
+                # Shuffle
+                permute_idxs = np.random.permutation(len(train_data[agent_idx][0]))
+
+                # Policy data
+                obs = torch.tensor(train_data[agent_idx][0][permute_idxs],
+                                   dtype=torch.float32,
+                                   device=DEVICE)
+                acts = torch.tensor(train_data[agent_idx][1][permute_idxs],
+                                    dtype=torch.int32,
+                                    device=DEVICE)
+                gaes = torch.tensor(train_data[agent_idx][3][permute_idxs],
+                                    dtype=torch.float32,
+                                    device=DEVICE)
+                act_log_probs = torch.tensor(train_data[agent_idx][4][permute_idxs],
+                                             dtype=torch.float32,
+                                             device=DEVICE)
+
+                # Value data
+                returns = discount_rewards(train_data[agent_idx][2])[permute_idxs]
+                returns = torch.tensor(returns, dtype=torch.float32, device=DEVICE)
+
+                returns_.append(returns)
+                obs_.append(obs)
+                # Train model
+                self.ppo_trainers[agent_idx].train_policy(obs, acts, act_log_probs, gaes)
+
+            returns_ = torch.stack(returns_).view(len(train_data[agent_idx][0]), -1)
+            obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),
+                                                                        -1)
+            for ppo_ in self.ppo_trainers:
+                ppo_.train_value(obs_, returns_)
+
+            if (episode_idx + 1) % print_freq == 0:
+                print('Episode {} | Avg Reward {:.1f}'.format(episode_idx + 1,
+                                                              np.mean(ep_rewards[-print_freq:])))
+                print('######################################################')
+
+    def set_agents(self, agents: Iterable[Agent]):
+        self.agents = agents
+        for ppo in self.ppo_trainers:
+            ppo.a
 
 
 def main():
     args = parse_arguments()
 
-    env = gym.make(f"pressureplate-linear-{args.num_agents}p-v0")
+    mappo = Mappo(args.num_agents, args.num_episodes, args.max_steps, args.render, args.print_freq)
 
-    agents = []
-    critic_net = CriticNetwork(env.observation_space[0].shape[0], env.n_agents).to(DEVICE)
-    for agent_idx in range(args.num_agents):
-
-        actor_net = ActorNetwork(env.observation_space[0].shape[0],
-                                 env.action_space[0].n).to(DEVICE)
-
-        ppo_ = PPOTrainer(actor_net,
-                          critic_net,
-                          ppo_clip_val=0.2,
-                          policy_lr=0.002,
-                          value_lr=0.02,
-                          target_kl_div=0.02,
-                          max_policy_train_iters=10,
-                          value_train_iters=10)
-
-        agents.append(Agent(actor=actor_net, ppo=ppo_, reward=[]))
-
-    n_episodes = args.num_episodes
-    print_freq = args.print_freq
-
-    # Training loop
-    ep_rewards = []
-
-    for episode_idx in range(n_episodes):
-        # Perform rollout
-        train_data, reward = rollout(agents, critic_net, env, args.max_steps, render=args.render)
-        ep_rewards.append(reward)
-        returns_ = []
-        obs_ = []
-        for agent_idx in range(len(agents)):
-            # Shuffle
-            permute_idxs = np.random.permutation(len(train_data[agent_idx][0]))
-
-            # Policy data
-            obs = torch.tensor(train_data[agent_idx][0][permute_idxs],
-                               dtype=torch.float32,
-                               device=DEVICE)
-            acts = torch.tensor(train_data[agent_idx][1][permute_idxs],
-                                dtype=torch.int32,
-                                device=DEVICE)
-            gaes = torch.tensor(train_data[agent_idx][3][permute_idxs],
-                                dtype=torch.float32,
-                                device=DEVICE)
-            act_log_probs = torch.tensor(train_data[agent_idx][4][permute_idxs],
-                                         dtype=torch.float32,
-                                         device=DEVICE)
-
-            # Value data
-            returns = discount_rewards(train_data[agent_idx][2])[permute_idxs]
-            returns = torch.tensor(returns, dtype=torch.float32, device=DEVICE)
-
-            returns_.append(returns)
-            obs_.append(obs)
-            # Train model
-            agents[agent_idx].ppo.train_policy(obs, acts, act_log_probs, gaes)
-
-        returns_ = torch.stack(returns_).view(len(train_data[agent_idx][0]), -1)
-        obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),
-                                                                    -1)
-
-        ppo_.train_value(obs_, returns_)
-
-        if (episode_idx + 1) % print_freq == 0:
-
-            print('Episode {} | Avg Reward {:.1f}'.format(episode_idx + 1,
-                                                          np.mean(ep_rewards[-print_freq:])))
-            print('######################################################')
+    mappo.run()
 
 
 if __name__ == '__main__':
