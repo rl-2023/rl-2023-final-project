@@ -26,9 +26,11 @@ class ActorNetwork(nn.Module):
         super().__init__()
 
         self.policy_layers = nn.Sequential(
-            KANLayer(obs_space_size, 64*2).to(DEVICE), 
-            KANLayer(64*2, 64).to(DEVICE),
-            KANLayer(64, action_space_size).to(DEVICE)
+            KANLayer(obs_space_size, 64).to(DEVICE), 
+            nn.LayerNorm(64),
+            KANLayer(64, 32).to(DEVICE),
+            nn.LayerNorm(32),
+            KANLayer(32, action_space_size).to(DEVICE)
         )
 
     def policy(self, obs):
@@ -45,9 +47,11 @@ class CriticNetwork(nn.Module):
         super().__init__()
 
         self.value_layers = nn.Sequential(
-            KANLayer(obs_space_size*n_agents, 64*2).to(DEVICE), 
-            KANLayer(64*2, 64).to(DEVICE),
-            KANLayer(64, 1).to(DEVICE)
+            KANLayer(obs_space_size*n_agents, 64).to(DEVICE), 
+            nn.LayerNorm(64),
+            KANLayer(64, 32).to(DEVICE),
+            nn.LayerNorm(32),
+            KANLayer(32, n_agents).to(DEVICE)
         )
 
     def value(self, obs):
@@ -171,7 +175,7 @@ def rollout(agents, critic_net, env, max_steps=1000, render=False):
             act_log_prob_=[]
             
             val=critic_net(torch.tensor([obs], dtype=torch.float32, device=DEVICE).view(1,-1)) #TODO fit datastructure 
-            val=val.item()
+            val=val.tolist()[0]
 
             for agent_idx in range(len(agents)):
                 
@@ -183,7 +187,7 @@ def rollout(agents, critic_net, env, max_steps=1000, render=False):
                 act=act.item()
 
                 act_.append(act)
-                val_.append(val)
+                val_.append(val[agent_idx])
                 act_log_prob_.append(act_log_prob)
 
             next_obs, reward, done, _ = env.step(act_)
@@ -240,7 +244,7 @@ def main():
 
         actor_net=ActorNetwork(env.observation_space[0].shape[0], env.action_space[0].n).to(DEVICE)
 
-        ppo_=PPOTrainer(actor_net,critic_net,ppo_clip_val=0.2, policy_lr =0.002, value_lr = 0.02, target_kl_div = 0.02, max_policy_train_iters = 10,value_train_iters = 10)
+        ppo_=PPOTrainer(actor_net,critic_net,ppo_clip_val=0.2, policy_lr =0.002, value_lr = 0.002, target_kl_div = 0.02, max_policy_train_iters = 1,value_train_iters = 1)
 
         agents.append(Agent(actor = actor_net,
                             ppo = ppo_,
@@ -284,7 +288,7 @@ def main():
             agents[agent_idx].ppo.train_policy(obs, acts, act_log_probs, gaes)
 
 
-        returns_=torch.stack(returns_).view(len(train_data[agent_idx][0]),-1) 
+        returns_=torch.stack(returns_).permute(1,0) #.view(len(train_data[agent_idx][0]),-1) 
         obs_=torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),-1)
 
 
