@@ -8,6 +8,7 @@ from torch import optim
 from .KAN import KANLayer
 from torch.distributions.categorical import Categorical
 from dataclasses import dataclass
+from copy import deepcopy
 import argparse
 import warnings
 
@@ -64,16 +65,16 @@ class CriticNetwork(nn.Module):
 
 class PPOTrainer():
   def __init__(self,
-              ActorNetwork,
-              CriticNetwork,
+              agents,
               ppo_clip_val=0.2,
               target_kl_div=0.01,
               max_policy_train_iters=40,
               value_train_iters=40,
               policy_lr=3e-4,
               value_lr=1e-2):
-    self.ac = ActorNetwork
-    self.cr = CriticNetwork
+    self.ac = agents.actor
+    self.cr = agents.critic
+    self.old_cr = agents.critic_old
     self.ppo_clip_val = ppo_clip_val
     self.target_kl_div = target_kl_div
     self.max_policy_train_iters = max_policy_train_iters
@@ -105,6 +106,7 @@ class PPOTrainer():
       loss_store.append(policy_loss.item())
 
       policy_loss.backward()
+      torch.nn.utils.clip_grad_norm_(self.ac.parameters(), max_norm=10.0)
       self.policy_optim.step()
 
       kl_div = (old_log_probs - new_log_probs).mean()
@@ -113,16 +115,28 @@ class PPOTrainer():
     print(f"Policy loss: avg {np.mean(loss_store)} std {np.std(loss_store)}")
 
   def train_value(self, obs, returns):
+    
     loss_store=[]
+    eps=self.ppo_clip_val
     for _ in range(self.value_train_iters):
       self.value_optim.zero_grad()
 
+      old_values=self.old_cr.value(obs)
       values = self.cr.value(obs)
-      value_loss = (returns - values) ** 2
-      value_loss = value_loss.mean()
+      clipped_values=values.clamp(
+          old_values-eps,old_values+eps
+      )
+      clipped_loss=(clipped_values-returns)**2
+      full_value_loss = (returns - values) ** 2
+      value_loss=torch.max(full_value_loss,clipped_loss).mean()
+      
       loss_store.append(value_loss.item())
-      value_loss.backward()
+      value_loss.backward() 
+      self.old_cr.load_state_dict(self.cr.state_dict())
+      torch.nn.utils.clip_grad_norm_(self.cr.parameters(), max_norm=10.0)
       self.value_optim.step()
+
+    
     print(f"Value loss: avg {np.mean(loss_store)} std {np.std(loss_store)}")
     print('----')
 
@@ -152,14 +166,14 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
 @dataclass
 class Agent:
     actor: ActorNetwork
-    #critic: CriticNetwork
-    ppo: PPOTrainer
+    critic : CriticNetwork
+    critic_old : CriticNetwork
     reward:[]
 
     def avg_rewards(self):
         return np.mean(self.rewards)
 
-def rollout(agents, critic_net, env, max_steps=1000, render=False):
+def rollout(agents, env, max_steps=1000, render=False):
         train_data = [ [[], [], [], [], []] for _ in range(env.n_agents)] # obs, act, reward, values, act_log_probs
         obs, _ = env.reset()
         if render:
@@ -174,7 +188,7 @@ def rollout(agents, critic_net, env, max_steps=1000, render=False):
             val_=[]
             act_log_prob_=[]
             
-            val=critic_net(torch.tensor([obs], dtype=torch.float32, device=DEVICE).view(1,-1)) #TODO fit datastructure 
+            val=agents[0].critic(torch.tensor([obs], dtype=torch.float32, device=DEVICE).view(1,-1))  
             val=val.tolist()[0]
 
             for agent_idx in range(len(agents)):
@@ -240,14 +254,13 @@ def main():
 
     agents=[]
     critic_net=CriticNetwork(env.observation_space[0].shape[0], env.n_agents).to(DEVICE)
+    old_critic_net=deepcopy(critic_net)
     for agent_idx in range(args.num_agents):
 
         actor_net=ActorNetwork(env.observation_space[0].shape[0], env.action_space[0].n).to(DEVICE)
-
-        ppo_=PPOTrainer(actor_net,critic_net,ppo_clip_val=0.2, policy_lr =0.002, value_lr = 0.002, target_kl_div = 0.02, max_policy_train_iters = 1,value_train_iters = 1)
-
         agents.append(Agent(actor = actor_net,
-                            ppo = ppo_,
+                            critic = critic_net,
+                            critic_old = old_critic_net,
                             reward = []
                             )
                         )
@@ -260,7 +273,7 @@ def main():
 
     for episode_idx in range(n_episodes):
         # Perform rollout
-        train_data, reward = rollout(agents,critic_net, env, args.max_steps, render=args.render)
+        train_data, reward = rollout(agents, env, args.max_steps, render=args.render)
         ep_rewards.append(reward)
         returns_=[]
         obs_=[]
@@ -285,7 +298,9 @@ def main():
             returns_.append(returns)
             obs_.append(obs)
             # Train model
-            agents[agent_idx].ppo.train_policy(obs, acts, act_log_probs, gaes)
+            ppo_=PPOTrainer(agents[agent_idx],ppo_clip_val=0.2, policy_lr =0.002, value_lr = 0.002, target_kl_div = 0.02, max_policy_train_iters = 1,value_train_iters = 1)
+
+            ppo_.train_policy(obs, acts, act_log_probs, gaes)
 
 
         returns_=torch.stack(returns_).permute(1,0) #.view(len(train_data[agent_idx][0]),-1) 
