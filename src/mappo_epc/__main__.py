@@ -1,5 +1,12 @@
+import logging.config
+from pathlib import Path
+
 from mappo_epc.mappo import parse_arguments
 from mappo_epc import epc
+
+Path("logs").mkdir(exist_ok=True)
+
+logging.config.fileConfig("logging.ini")
 
 if __name__ == '__main__':
     args = parse_arguments()

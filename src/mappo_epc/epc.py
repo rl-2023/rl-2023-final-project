@@ -2,6 +2,7 @@
 import abc
 import concurrent.futures
 import itertools
+import logging
 import random
 from typing import Iterable
 
@@ -19,6 +20,8 @@ from mappo_epc.mappo import Agent, Mappo
 # compute fitness score for each agent as average reward over training
 # pick the top K agents
 
+logger = logging.getLogger(__name__)
+
 
 def train(train_agent: Mappo):
     train_agent.run()
@@ -33,6 +36,7 @@ def train_agents_parallel(agents: Iterable[Mappo]):
     Returns:
         Iterable[TrainingAgents]: The trained agents.
     """
+    logger.info("Starting parallel training of %s agents", len(agents))
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = list(executor.map(train, agents))
 
@@ -73,10 +77,11 @@ class Crossover(EvolutionaryStage):
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         """Runs the crossover stage."""
+        logger.info("Running crossover for %s parallel games", len(population))
         agent_pairs = list(itertools.combinations_with_replacement(population, 2))
         agent_pairs = [(pairs[0] + pairs[1]) for pairs in agent_pairs]
 
-        c = kwargs.get('c')
+        c = kwargs.get('c', len(agent_pairs))
         sampled_sets = random.sample(agent_pairs, c)
 
         return sampled_sets
@@ -94,6 +99,7 @@ class Mutation(EvolutionaryStage):
         super().__init__(name)
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
+        logger.info("Running mutation for %s parallel games", len(population))
         # create training agent classes and assign them the agents
         num_parallel_games = len(population)
         training_agents = [Mappo(**kwargs) for _ in range(num_parallel_games)]
@@ -117,6 +123,7 @@ class Selection(EvolutionaryStage):
         self.num_survivors = num_survivors
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
+        logger.info("Running selection stage for %s parallel games", len(population))
         flat_agents = [agent for game in population for agent in game]
 
         agents_to_score = [(agent, agent.avg_rewards()) for agent in flat_agents]
@@ -141,6 +148,7 @@ class Epc:
         self.print_freq = print_freq
 
     def run(self) -> Iterable[Agent]:
+        logger.info("Starting EPC")
         # as a first step, we just want to train the agents in the parallel games
         training_agents = [Mappo(self.num_agents, self.num_episodes, self.max_steps, self.render, self.print_freq) for _ in range(self.parallel_games)]
 
