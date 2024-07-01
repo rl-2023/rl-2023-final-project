@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
-"""
-From the official repo: https://github.com/KindXiaoming/pykan/tree/master
 
-just changed the output of KAN layer
-"""
 def B_batch(x, grid, k=0, extend=True, device='cuda' if torch.cuda.is_available() else 'cpu'):
     '''
     evaludate x on B-spline bases
@@ -67,7 +63,7 @@ def B_batch(x, grid, k=0, extend=True, device='cuda' if torch.cuda.is_available(
     return value
 
 
-def coef2curve(x_eval, grid, coef, k, device="cpu"):
+def coef2curve(x_eval, grid, coef, k, device='cuda' if torch.cuda.is_available() else 'cpu'):
     '''
     converting B-spline coefficients to B-spline curves. Evaluate x on B-spline curves (summing up B_batch results over B-spline basis).
     
@@ -109,7 +105,7 @@ def coef2curve(x_eval, grid, coef, k, device="cpu"):
     return y_eval
 
 
-def curve2coef(x_eval, y_eval, grid, k, device="cpu"):
+def curve2coef(x_eval, y_eval, grid, k, device='cuda' if torch.cuda.is_available() else 'cpu'):
     '''
     converting B-spline curves to B-spline coefficients using least squares.
     
