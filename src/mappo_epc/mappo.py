@@ -38,12 +38,12 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 args=parse_arguments()
 
 if args.kan==True:
-    from PPONetworks import KAN_ActorNetwork as ActorNetwork
-    from PPONetworks import KAN_CriticNetwork as CriticNetwork
+    from .PPONetworks import KAN_ActorNetwork as ActorNetwork
+    from .PPONetworks import KAN_CriticNetwork as CriticNetwork
 
 else:
-    from PPONetworks import MLP_ActorNetwork as ActorNetwork
-    from PPONetworks import MLP_CriticNetwork as CriticNetwork 
+    from .PPONetworks import MLP_ActorNetwork as ActorNetwork
+    from .PPONetworks import MLP_CriticNetwork as CriticNetwork 
 
 @dataclass
 class Agent:
