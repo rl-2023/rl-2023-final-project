@@ -15,12 +15,7 @@ if __name__ == '__main__':
     mutation = epc.Mutation()
     selection = epc.Selection(args.parallel_games)
 
-    evolution = epc.Epc(args.parallel_games,
-                        [crossover, mutation, selection],
-                        args.num_agents,
-                        args.num_episodes,
-                        args.max_steps,
-                        args.render,
-                        args.print_freq)
+    evolution = epc.Epc(args.parallel_games, [crossover, mutation, selection], args.num_agents,
+                        args.num_episodes, args.max_steps, args.render, args.print_freq)
 
     evolution.run()

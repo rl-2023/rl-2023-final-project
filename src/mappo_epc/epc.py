@@ -137,8 +137,8 @@ class Selection(EvolutionaryStage):
 class Epc:
     """Runs the Evolutionary Population Curriculum Algorithm."""
 
-    def __init__(self, parallel_games: int, stages: Iterable[EvolutionaryStage], num_agents: int, num_episodes: int,
-                 max_steps: int, render: bool, print_freq: int):
+    def __init__(self, parallel_games: int, stages: Iterable[EvolutionaryStage], num_agents: int,
+                 num_episodes: int, max_steps: int, render: bool, print_freq: int):
         self.parallel_games = parallel_games
         self.stages = stages
         self.num_agents = num_agents
@@ -150,7 +150,10 @@ class Epc:
     def run(self) -> Iterable[Agent]:
         logger.info("Starting EPC")
         # as a first step, we just want to train the agents in the parallel games
-        training_agents = [Mappo(self.num_agents, self.num_episodes, self.max_steps, self.render, self.print_freq) for _ in range(self.parallel_games)]
+        training_agents = [
+            Mappo(self.num_agents, self.num_episodes, self.max_steps, self.render, self.print_freq)
+            for _ in range(self.parallel_games)
+        ]
 
         training_agents = train_agents_parallel(training_agents)
 
