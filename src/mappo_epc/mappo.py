@@ -48,6 +48,13 @@ def parse_arguments():
                         type=int,
                         default=3,
                         help='The number of parallel games to play for the EPC.')
+    parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
+    parser.add_argument('--policy_lr', type=float, default=0.002, help='Learning rate for the policy network')
+    parser.add_argument('--value_lr', type=float, default=0.02, help='Learning rate for the value network')
+    parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
+    parser.add_argument('--max_policy_train_iters', type=int, default=10, help='Maximum iterations for policy training')
+    parser.add_argument('--value_train_iters', type=int, default=10, help='Number of iterations for value training')
+
     return parser.parse_args()
 
 
@@ -245,12 +252,28 @@ def rollout(agents, env, max_steps=1000, render=False):
 
 class Mappo:
 
-    def __init__(self, num_agents, num_episodes, max_steps, render, print_freq):
+    def __init__(self, num_agents,
+                 num_episodes,
+                 max_steps,
+                 render,
+                 print_freq,
+                 ppo_clip_val,
+                 policy_lr,
+                 value_lr,
+                 target_kl_div,
+                 max_policy_train_iters,
+                 value_train_iters):
         self.num_agents = num_agents
         self.num_episodes = num_episodes
         self.max_steps = max_steps
         self.render = render
         self.print_freq = print_freq
+        self.ppo_clip_val = ppo_clip_val
+        self.policy_lr = policy_lr
+        self.value_lr = value_lr
+        self.target_kl_div = target_kl_div
+        self.max_policy_train_iters = max_policy_train_iters
+        self.value_train_iters = value_train_iters
         self.agents = []
         self.ppo_trainers = []
 
@@ -265,12 +288,12 @@ class Mappo:
 
             agent = Agent(id=agent_idx, actor=actor_net, critic=self.critic_net, critic_old=old_critic_net, reward=[])
             ppo = PPOTrainer(agent=agent,
-                             ppo_clip_val=0.2,
-                             policy_lr=0.002,
-                             value_lr=0.02,
-                             target_kl_div=0.02,
-                             max_policy_train_iters=10,
-                             value_train_iters=10)
+                             ppo_clip_val=self.ppo_clip_val,
+                             policy_lr=self.policy_lr,
+                             value_lr=self.value_lr,
+                             target_kl_div=self.target_kl_div,
+                             max_policy_train_iters=self.max_policy_train_iters,
+                             value_train_iters=self.value_train_iters)
 
             self.agents.append(agent)
             self.ppo_trainers.append(ppo)
@@ -321,21 +344,13 @@ class Mappo:
 
                 returns_.append(returns)
                 obs_.append(obs)
-                # Train model
-                ppo_ = PPOTrainer(self.agents[agent_idx],
-                                  ppo_clip_val=0.2,
-                                  policy_lr=0.002,
-                                  value_lr=0.002,
-                                  target_kl_div=0.02,
-                                  max_policy_train_iters=10,
-                                  value_train_iters=10)
 
-                ppo_.train_policy(obs, acts, act_log_probs, gaes, episode_idx)
+                self.ppo_trainers[agent_idx].train_policy(obs, acts, act_log_probs, gaes, episode_idx)
 
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
             obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]), -1)
 
-            ppo_.train_value(obs_, returns_, episode_idx)
+            self.ppo_trainers[agent_idx].train_value(obs_, returns_, episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
                 tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
@@ -346,7 +361,17 @@ class Mappo:
 def main():
     args = parse_arguments()
 
-    mappo = Mappo(args.num_agents, args.num_episodes, args.max_steps, args.render, args.print_freq)
+    mappo = Mappo(num_agents=args.num_agents,
+                  num_episodes=args.num_episodes,
+                  max_steps=args.max_steps,
+                  render=args.render,
+                  print_freq=args.print_freq,
+                  ppo_clip_val=args.ppo_clip_val,
+                  policy_lr=args.policy_lr,
+                  value_lr=args.value_lr,
+                  target_kl_div=args.target_kl_div,
+                  max_policy_train_iters=args.max_policy_train_iters,
+                  value_train_iters=args.value_train_iters)
 
     mappo.run()
 

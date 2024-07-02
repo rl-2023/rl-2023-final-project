@@ -138,7 +138,12 @@ class Epc:
     """Runs the Evolutionary Population Curriculum Algorithm."""
 
     def __init__(self, parallel_games: int, stages: Iterable[EvolutionaryStage], num_agents: int,
-                 num_episodes: int, max_steps: int, render: bool, print_freq: int):
+                 num_episodes: int, max_steps: int, render: bool, print_freq: int, ppo_clip_val,
+                 policy_lr,
+                 value_lr,
+                 target_kl_div,
+                 max_policy_train_iters,
+                 value_train_iters):
         self.parallel_games = parallel_games
         self.stages = stages
         self.num_agents = num_agents
@@ -146,12 +151,28 @@ class Epc:
         self.max_steps = max_steps
         self.render = render
         self.print_freq = print_freq
+        self.ppo_clip_val = ppo_clip_val
+        self.policy_lr = policy_lr
+        self.value_lr = value_lr
+        self.target_kl_div = target_kl_div
+        self.max_policy_train_iters = max_policy_train_iters
+        self.value_train_iters = value_train_iters
 
     def run(self) -> Iterable[Agent]:
         logger.info("Starting EPC")
         # as a first step, we just want to train the agents in the parallel games
         training_agents = [
-            Mappo(self.num_agents, self.num_episodes, self.max_steps, self.render, self.print_freq)
+            Mappo(num_agents=self.num_agents,
+                  num_episodes=self.num_episodes,
+                  max_steps=self.max_steps,
+                  render=self.render,
+                  print_freq=self.print_freq,
+                  ppo_clip_val=self.ppo_clip_val,
+                  policy_lr=self.policy_lr,
+                  value_lr=self.value_lr,
+                  target_kl_div=self.target_kl_div,
+                  max_policy_train_iters=self.max_policy_train_iters,
+                  value_train_iters=self.value_train_iters)
             for _ in range(self.parallel_games)
         ]
 
