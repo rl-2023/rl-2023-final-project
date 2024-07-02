@@ -20,7 +20,7 @@ from mappo_epc.mappo import Agent, Mappo
 # compute fitness score for each agent as average reward over training
 # pick the top K agents
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 
 
 def train(train_agent: Mappo):
@@ -36,7 +36,7 @@ def train_agents_parallel(agents: Iterable[Mappo]):
     Returns:
         Iterable[TrainingAgents]: The trained agents.
     """
-    logger.info("Starting parallel training of %s agents", len(agents))
+    logger.info("Starting parallel training of %s games", len(agents))
     with concurrent.futures.ProcessPoolExecutor() as executor:
         results = list(executor.map(train, agents))
 

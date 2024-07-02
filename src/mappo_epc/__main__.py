@@ -8,7 +8,10 @@ Path("logs").mkdir(exist_ok=True)
 
 logging.config.fileConfig("logging.ini")
 
+logger = logging.getLogger(__name__)
+
 if __name__ == '__main__':
+    logger.info("Starting EPC run.")
     args = parse_arguments()
 
     crossover = epc.Crossover()

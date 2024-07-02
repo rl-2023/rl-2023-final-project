@@ -1,3 +1,5 @@
+import logging
+
 import gym
 import pressureplate
 import matplotlib.pyplot as plt
@@ -19,6 +21,7 @@ PPO original implementation from: https://colab.research.google.com/drive/1MsRlE
 youtube explanation: https://www.youtube.com/watch?v=HR8kQMTO8bk
 """
 
+logger = logging.getLogger()
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
@@ -36,6 +39,10 @@ def parse_arguments():
                         action='store_true',
                         help='Render the environment after each step')
     parser.add_argument('--print_freq', type=int, default=1, help='Print frequence wrt episodes')
+    parser.add_argument('--parallel_games',
+                        type=int,
+                        default=3,
+                        help='The number of parallel games to play for the EPC.')
     return parser.parse_args()
 
 
@@ -62,19 +69,19 @@ class Agent:
         return np.mean(self.rewards)
 
 
-class PPOTrainer():
+class PPOTrainer:
 
     def __init__(self,
-                 agents,
+                 agent: Agent,
                  ppo_clip_val=0.2,
                  target_kl_div=0.01,
                  max_policy_train_iters=40,
                  value_train_iters=40,
                  policy_lr=3e-4,
                  value_lr=1e-2):
-        self.ac = agents.actor
-        self.cr = agents.critic
-        self.old_cr = agents.critic_old
+        self.ac = agent.actor
+        self.cr = agent.critic
+        self.old_cr = agent.critic_old
         self.ppo_clip_val = ppo_clip_val
         self.target_kl_div = target_kl_div
         self.max_policy_train_iters = max_policy_train_iters
@@ -108,7 +115,7 @@ class PPOTrainer():
             kl_div = (old_log_probs - new_log_probs).mean()
             if kl_div >= self.target_kl_div:
                 break
-        print(f"Policy loss: avg {np.mean(loss_store)} std {np.std(loss_store)}")
+        logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
 
     def train_value(self, obs, returns):
 
@@ -130,8 +137,8 @@ class PPOTrainer():
             torch.nn.utils.clip_grad_norm_(self.cr.parameters(), max_norm=10.0)
             self.value_optim.step()
 
-        print(f"Value loss: avg {np.mean(loss_store)} std {np.std(loss_store)}")
-        print('----')
+        logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
+        logger.info('----')
 
 
 def discount_rewards(rewards, gamma=0.99):
@@ -162,6 +169,7 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
 
 
 def rollout(agents, env, max_steps=1000, render=False):
+    logger.info("Doing rollout")
     train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
                  ]  # obs, act, reward, values, act_log_probs
     obs, _ = env.reset()
@@ -213,7 +221,7 @@ def rollout(agents, env, max_steps=1000, render=False):
         ep_reward += reward
 
         if all(done):
-            print('All dones')
+            logger.info('All dones')
             break
 
     for i in range(len(train_data)):
@@ -226,79 +234,103 @@ def rollout(agents, env, max_steps=1000, render=False):
 
     return train_data, np.sum(ep_reward)
 
+class Mappo:
+
+    def __init__(self, num_agents, num_episodes, max_steps, render, print_freq):
+        self.num_agents = num_agents
+        self.num_episodes = num_episodes
+        self.max_steps = max_steps
+        self.render = render
+        self.print_freq = print_freq
+        self.agents = []
+        self.ppo_trainers = []
+
+        self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
+        self.critic_net = CriticNetwork(self.env.observation_space[0].shape[0],
+                                        self.env.n_agents).to(DEVICE)
+        old_critic_net = deepcopy(self.critic_net)
+
+        for agent_idx in range(self.num_agents):
+            actor_net = ActorNetwork(self.env.observation_space[0].shape[0],
+                                     self.env.action_space[0].n).to(DEVICE)
+
+            agent = Agent(actor=actor_net, critic=self.critic_net, critic_old=old_critic_net, reward=[])
+            ppo = PPOTrainer(agent=agent,
+                             ppo_clip_val=0.2,
+                             policy_lr=0.002,
+                             value_lr=0.02,
+                             target_kl_div=0.02,
+                             max_policy_train_iters=10,
+                             value_train_iters=10)
+
+            self.agents.append(agent)
+            self.ppo_trainers.append(ppo)
+
+    def run(self):
+        n_episodes = args.num_episodes
+        print_freq = args.print_freq
+
+        # Training loop
+        ep_rewards = []
+
+        for episode_idx in range(n_episodes):
+            # Perform rollout
+            train_data, reward = rollout(self.agents, self.env, args.max_steps, render=args.render)
+            ep_rewards.append(reward)
+            returns_ = []
+            obs_ = []
+            for agent_idx in range(len(self.agents)):
+                # Shuffle
+                permute_idxs = np.random.permutation(len(train_data[agent_idx][0]))
+
+                # Policy data
+                obs = torch.tensor(train_data[agent_idx][0][permute_idxs],
+                                   dtype=torch.float32,
+                                   device=DEVICE)
+                acts = torch.tensor(train_data[agent_idx][1][permute_idxs],
+                                    dtype=torch.int32,
+                                    device=DEVICE)
+                gaes = torch.tensor(train_data[agent_idx][3][permute_idxs],
+                                    dtype=torch.float32,
+                                    device=DEVICE)
+                act_log_probs = torch.tensor(train_data[agent_idx][4][permute_idxs],
+                                             dtype=torch.float32,
+                                             device=DEVICE)
+
+                # Value data
+                returns = discount_rewards(train_data[agent_idx][2])[permute_idxs]
+                returns = torch.tensor(returns, dtype=torch.float32, device=DEVICE)
+
+                returns_.append(returns)
+                obs_.append(obs)
+                # Train model
+                ppo_ = PPOTrainer(self.agents[agent_idx],
+                                  ppo_clip_val=0.2,
+                                  policy_lr=0.002,
+                                  value_lr=0.002,
+                                  target_kl_div=0.02,
+                                  max_policy_train_iters=10,
+                                  value_train_iters=10)
+
+                ppo_.train_policy(obs, acts, act_log_probs, gaes)
+
+            returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
+            obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),
+                                                                        -1)
+
+            ppo_.train_value(obs_, returns_)
+
+            if (episode_idx + 1) % print_freq == 0:
+                logger.info('Episode %f | Avg Reward %:.1f', episode_idx + 1, np.mean(ep_rewards[-print_freq:]))
+                logger.info('######################################################')
+
 
 def main():
-    env = gym.make(f"pressureplate-linear-{args.num_agents}p-v0")
+    args = parse_arguments()
 
-    agents = []
-    critic_net = CriticNetwork(env.observation_space[0].shape[0], env.n_agents).to(DEVICE)
-    old_critic_net = deepcopy(critic_net)
-    for agent_idx in range(args.num_agents):
+    mappo = Mappo(args.num_agents, args.num_episodes, args.max_steps, args.render, args.print_freq)
 
-        actor_net = ActorNetwork(env.observation_space[0].shape[0],
-                                 env.action_space[0].n).to(DEVICE)
-        agents.append(
-            Agent(actor=actor_net, critic=critic_net, critic_old=old_critic_net, reward=[]))
-
-    n_episodes = args.num_episodes
-    print_freq = args.print_freq
-
-    # Training loop
-    ep_rewards = []
-
-    for episode_idx in range(n_episodes):
-        # Perform rollout
-        train_data, reward = rollout(agents, env, args.max_steps, render=args.render)
-        ep_rewards.append(reward)
-        returns_ = []
-        obs_ = []
-        for agent_idx in range(len(agents)):
-            # Shuffle
-            permute_idxs = np.random.permutation(len(train_data[agent_idx][0]))
-
-            # Policy data
-            obs = torch.tensor(train_data[agent_idx][0][permute_idxs],
-                               dtype=torch.float32,
-                               device=DEVICE)
-            acts = torch.tensor(train_data[agent_idx][1][permute_idxs],
-                                dtype=torch.int32,
-                                device=DEVICE)
-            gaes = torch.tensor(train_data[agent_idx][3][permute_idxs],
-                                dtype=torch.float32,
-                                device=DEVICE)
-            act_log_probs = torch.tensor(train_data[agent_idx][4][permute_idxs],
-                                         dtype=torch.float32,
-                                         device=DEVICE)
-
-            # Value data
-            returns = discount_rewards(train_data[agent_idx][2])[permute_idxs]
-            returns = torch.tensor(returns, dtype=torch.float32, device=DEVICE)
-
-            returns_.append(returns)
-            obs_.append(obs)
-            # Train model
-            ppo_ = PPOTrainer(agents[agent_idx],
-                              ppo_clip_val=0.2,
-                              policy_lr=0.002,
-                              value_lr=0.002,
-                              target_kl_div=0.02,
-                              max_policy_train_iters=10,
-                              value_train_iters=10)
-
-            ppo_.train_policy(obs, acts, act_log_probs, gaes)
-
-
-        returns_ = torch.stack(returns_).permute(1, 0)  #.view(len(train_data[agent_idx][0]),-1)
-        obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),
-                                                                    -1)
-
-        ppo_.train_value(obs_, returns_)
-
-        if (episode_idx + 1) % print_freq == 0:
-
-            print('Episode {} | Avg Reward {:.1f}'.format(episode_idx + 1,
-                                                          np.mean(ep_rewards[-print_freq:])))
-            print('######################################################')
+    mappo.run()
 
 
 if __name__ == '__main__':
