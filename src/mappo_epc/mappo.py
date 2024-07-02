@@ -27,6 +27,7 @@ logger = logging.getLogger()
 
 tb_writer = SummaryWriter()
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -95,10 +96,8 @@ class PPOTrainer:
 
         self.policy_optim = optim.Adam(self.ac.parameters(), lr=policy_lr)
         self.value_optim = optim.Adam(self.cr.parameters(), lr=value_lr)
-        self.policy_epoch = 0
-        self.value_epoch = 0
 
-    def train_policy(self, obs, acts, old_log_probs, gaes):
+    def train_policy(self, obs, acts, old_log_probs, gaes, episode):
         loss_store = []
         for _ in range(self.max_policy_train_iters):
 
@@ -124,11 +123,10 @@ class PPOTrainer:
             if kl_div >= self.target_kl_div:
                 break
 
-        tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), self.policy_epoch)
+        tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
-        self.policy_epoch += 1
 
-    def train_value(self, obs, returns):
+    def train_value(self, obs, returns, episode):
 
         loss_store = []
         eps = self.ppo_clip_val
@@ -138,8 +136,8 @@ class PPOTrainer:
             old_values = self.old_cr.value(obs)
             values = self.cr.value(obs)
             clipped_values = values.clamp(old_values - eps, old_values + eps)
-            clipped_loss = (clipped_values - returns)**2
-            full_value_loss = (returns - values)**2
+            clipped_loss = (clipped_values - returns) ** 2
+            full_value_loss = (returns - values) ** 2
             value_loss = torch.max(full_value_loss, clipped_loss).mean()
 
             loss_store.append(value_loss.item())
@@ -148,10 +146,10 @@ class PPOTrainer:
             torch.nn.utils.clip_grad_norm_(self.cr.parameters(), max_norm=10.0)
             self.value_optim.step()
 
-        tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), self.value_epoch)
+        tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
-        self.value_epoch += 1
+
 
 def discount_rewards(rewards, gamma=0.99):
     """
@@ -183,7 +181,7 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
 def rollout(agents, env, max_steps=1000, render=False):
     logger.info("Doing rollout for %d steps", max_steps)
     train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
-                 ]  # obs, act, reward, values, act_log_probs
+                  ]  # obs, act, reward, values, act_log_probs
     obs, _ = env.reset()
     if render:
         env.render()
@@ -200,7 +198,6 @@ def rollout(agents, env, max_steps=1000, render=False):
         val = val.tolist()[0]
 
         for agent_idx in range(len(agents)):
-
             logits = agents[agent_idx].actor(
                 torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
             act_distribution = Categorical(logits=logits)
@@ -244,6 +241,7 @@ def rollout(agents, env, max_steps=1000, render=False):
                                                   train_data[agent_idx][3])
 
     return train_data, np.sum(ep_reward)
+
 
 class Mappo:
 
@@ -332,12 +330,12 @@ class Mappo:
                                   max_policy_train_iters=10,
                                   value_train_iters=10)
 
-                ppo_.train_policy(obs, acts, act_log_probs, gaes)
+                ppo_.train_policy(obs, acts, act_log_probs, gaes, episode_idx)
 
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
             obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]), -1)
 
-            ppo_.train_value(obs_, returns_)
+            ppo_.train_value(obs_, returns_, episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
                 tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
