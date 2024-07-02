@@ -14,6 +14,12 @@ if __name__ == '__main__':
     logger.info("Starting EPC run.")
     args = parse_arguments()
 
+    logger.info("\nNumber of parallel games: %s\n" +
+                "Number of agents: %d\n" +
+                "Number of episodes per game: %d\n" +
+                "Max number of steps per episode: %d\n",
+                args.parallel_games, args.num_agents, args.num_episodes, args.max_steps)
+
     crossover = epc.Crossover()
     mutation = epc.Mutation()
     selection = epc.Selection(args.parallel_games)

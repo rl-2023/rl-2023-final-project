@@ -13,6 +13,8 @@ from copy import deepcopy
 import argparse
 import warnings
 
+from torch.utils.tensorboard import SummaryWriter
+
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 """
@@ -22,6 +24,8 @@ youtube explanation: https://www.youtube.com/watch?v=HR8kQMTO8bk
 """
 
 logger = logging.getLogger()
+
+tb_writer = SummaryWriter()
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
@@ -60,6 +64,7 @@ else:
 
 @dataclass
 class Agent:
+    id: int
     actor: ActorNetwork
     critic: CriticNetwork
     critic_old: CriticNetwork
@@ -79,6 +84,7 @@ class PPOTrainer:
                  value_train_iters=40,
                  policy_lr=3e-4,
                  value_lr=1e-2):
+        self.agent_id = agent.id
         self.ac = agent.actor
         self.cr = agent.critic
         self.old_cr = agent.critic_old
@@ -89,6 +95,8 @@ class PPOTrainer:
 
         self.policy_optim = optim.Adam(self.ac.parameters(), lr=policy_lr)
         self.value_optim = optim.Adam(self.cr.parameters(), lr=value_lr)
+        self.policy_epoch = 0
+        self.value_epoch = 0
 
     def train_policy(self, obs, acts, old_log_probs, gaes):
         loss_store = []
@@ -115,7 +123,10 @@ class PPOTrainer:
             kl_div = (old_log_probs - new_log_probs).mean()
             if kl_div >= self.target_kl_div:
                 break
+
+        tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), self.policy_epoch)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
+        self.policy_epoch += 1
 
     def train_value(self, obs, returns):
 
@@ -137,9 +148,10 @@ class PPOTrainer:
             torch.nn.utils.clip_grad_norm_(self.cr.parameters(), max_norm=10.0)
             self.value_optim.step()
 
+        tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), self.value_epoch)
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
-
+        self.value_epoch += 1
 
 def discount_rewards(rewards, gamma=0.99):
     """
@@ -169,7 +181,7 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
 
 
 def rollout(agents, env, max_steps=1000, render=False):
-    logger.info("Doing rollout")
+    logger.info("Doing rollout for %d steps", max_steps)
     train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
                  ]  # obs, act, reward, values, act_log_probs
     obs, _ = env.reset()
@@ -202,7 +214,6 @@ def rollout(agents, env, max_steps=1000, render=False):
             act_log_prob_.append(act_log_prob)
 
         next_obs, reward, done, _ = env.step(act_)
-        #print(f"actions {act_}  |  rewards {reward}")
 
         if render:
             env.render()
@@ -254,7 +265,7 @@ class Mappo:
             actor_net = ActorNetwork(self.env.observation_space[0].shape[0],
                                      self.env.action_space[0].n).to(DEVICE)
 
-            agent = Agent(actor=actor_net, critic=self.critic_net, critic_old=old_critic_net, reward=[])
+            agent = Agent(id=agent_idx, actor=actor_net, critic=self.critic_net, critic_old=old_critic_net, reward=[])
             ppo = PPOTrainer(agent=agent,
                              ppo_clip_val=0.2,
                              policy_lr=0.002,
@@ -265,6 +276,15 @@ class Mappo:
 
             self.agents.append(agent)
             self.ppo_trainers.append(ppo)
+
+            # layout for the Tensorboard that we can group the losses on tensorboard
+            layout = {
+                "ABCDE": {
+                    "policy loss": ["Multiline", [f"policy/loss/agent_{i}" for i in range(self.num_agents)]],
+                    "value loss": ["Multiline", [f"value/loss/agent_{i}" for i in range(self.num_agents)]],
+                },
+            }
+            tb_writer.add_custom_scalars(layout)
 
     def run(self):
         n_episodes = args.num_episodes
@@ -315,13 +335,13 @@ class Mappo:
                 ppo_.train_policy(obs, acts, act_log_probs, gaes)
 
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
-            obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]),
-                                                                        -1)
+            obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]), -1)
 
             ppo_.train_value(obs_, returns_)
 
             if (episode_idx + 1) % print_freq == 0:
-                logger.info('Episode %f | Avg Reward %:.1f', episode_idx + 1, np.mean(ep_rewards[-print_freq:]))
+                tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
+                logger.info('Episode %d | Avg Reward %.1f', episode_idx + 1, np.mean(ep_rewards[-print_freq:]))
                 logger.info('######################################################')
 
 
