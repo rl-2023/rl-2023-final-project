@@ -102,7 +102,9 @@ class Mutation(EvolutionaryStage):
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         logger.info("Running mutation for %s parallel games", len(population))
-        # create training agent classes and assign them the agents
+
+        self.game_kwargs["num_agents"] = len(population[0])
+
         num_parallel_games = len(population)
         training_agents = [Mappo(**self.game_kwargs) for _ in range(num_parallel_games)]
         for training_agent, trained_agents in zip(training_agents, population):
