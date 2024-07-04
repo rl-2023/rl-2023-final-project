@@ -106,7 +106,7 @@ class Mutation(EvolutionaryStage):
         self.game_kwargs["num_agents"] = len(population[0])
 
         num_parallel_games = len(population)
-        training_agents = [Mappo(**self.game_kwargs) for _ in range(num_parallel_games)]
+        training_agents = [Mappo(**self.game_kwargs, game_id=str(_)) for _ in range(num_parallel_games)]
         for training_agent, trained_agents in zip(training_agents, population):
             training_agent.agents = trained_agents
 
@@ -176,7 +176,8 @@ class Epc:
                   value_lr=self.value_lr,
                   target_kl_div=self.target_kl_div,
                   max_policy_train_iters=self.max_policy_train_iters,
-                  value_train_iters=self.value_train_iters)
+                  value_train_iters=self.value_train_iters,
+                  game_id=str(_))
             for _ in range(self.parallel_games)
         ]
 

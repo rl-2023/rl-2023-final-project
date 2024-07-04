@@ -263,7 +263,8 @@ class Mappo:
                  value_lr,
                  target_kl_div,
                  max_policy_train_iters,
-                 value_train_iters):
+                 value_train_iters,
+                 game_id: str):
         self.num_agents = num_agents
         self.num_episodes = num_episodes
         self.max_steps = max_steps
@@ -278,7 +279,9 @@ class Mappo:
         self.agents = []
         self.ppo_trainers = []
 
-        self.tb_writer = SummaryWriter()
+        current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        self.tb_writer = SummaryWriter(log_dir=f"runs/{current_time}_game_{game_id}", filename_suffix=f"_game_{game_id}")
 
         self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
 
@@ -374,7 +377,8 @@ def main():
                   value_lr=args.value_lr,
                   target_kl_div=args.target_kl_div,
                   max_policy_train_iters=args.max_policy_train_iters,
-                  value_train_iters=args.value_train_iters)
+                  value_train_iters=args.value_train_iters,
+                  game_id="0")
 
     mappo.run()
 
