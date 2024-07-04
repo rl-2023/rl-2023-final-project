@@ -37,7 +37,7 @@ def parse_arguments():
     parser.add_argument('--max_steps', type=int, default=100, help='Number of steps per episode')
     parser.add_argument('--kan',
                         type=bool,
-                        default=False,
+                        default=True,
                         help='Bool value if usining KAN networks for Actor and Critic')
     parser.add_argument('--render',
                         action='store_true',
@@ -60,11 +60,13 @@ def parse_arguments():
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 args = parse_arguments()
 
-if args.kan == True:
+if args.kan == False:
+    logger.info("Using KAN networks.")
     from .PPONetworks import KAN_ActorNetwork as ActorNetwork
     from .PPONetworks import KAN_CriticNetwork as CriticNetwork
 
 else:
+    logger.info("Using MLP networks.")
     from .PPONetworks import MLP_ActorNetwork as ActorNetwork
     from .PPONetworks import MLP_CriticNetwork as CriticNetwork
 
