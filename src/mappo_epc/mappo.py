@@ -36,7 +36,7 @@ def parse_arguments():
     parser.add_argument('--max_steps', type=int, default=100, help='Number of steps per episode')
     parser.add_argument('--kan',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Bool value if usining KAN networks for Actor and Critic')
     parser.add_argument('--render',
                         action='store_true',
@@ -77,7 +77,7 @@ class Agent:
     reward: []
 
     def avg_rewards(self):
-        return np.mean(self.rewards)
+        return np.mean(self.reward)
 
 
 class PPOTrainer:
@@ -140,8 +140,8 @@ class PPOTrainer:
         for _ in range(self.value_train_iters):
             self.value_optim.zero_grad()
 
-            old_values = self.old_cr.value(obs)
-            values = self.cr.value(obs)
+            old_values = self.old_cr(obs)
+            values = self.cr(obs)
             clipped_values = values.clamp(old_values - eps, old_values + eps)
             clipped_loss = (clipped_values - returns) ** 2
             full_value_loss = (returns - values) ** 2
@@ -201,12 +201,12 @@ def rollout(agents, env, max_steps=1000, render=False):
         val_ = []
         act_log_prob_ = []
 
-        val = agents[0].critic(torch.tensor([obs], dtype=torch.float32, device=DEVICE).view(1, -1))
-        val = val.tolist()[0]
-
+        # gather the actions and estimated values for each agent
         for agent_idx in range(len(agents)):
-            logits = agents[agent_idx].actor(
-                torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
+            val = agents[agent_idx].critic(torch.tensor([obs], dtype=torch.float32, device=DEVICE))
+            val = val.item()
+
+            logits = agents[agent_idx].actor(torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
             act_distribution = Categorical(logits=logits)
             act = act_distribution.sample()
             act_log_prob = act_distribution.log_prob(act).item()
@@ -214,9 +214,10 @@ def rollout(agents, env, max_steps=1000, render=False):
             act = act.item()
 
             act_.append(act)
-            val_.append(val[agent_idx])
+            val_.append(val)
             act_log_prob_.append(act_log_prob)
 
+        # take a step in the environment
         next_obs, reward, done, _ = env.step(act_)
 
         if render:
@@ -280,15 +281,13 @@ class Mappo:
         self.tb_writer = SummaryWriter()
 
         self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
-        self.critic_net = CriticNetwork(self.env.observation_space[0].shape[0],
-                                        self.env.n_agents).to(DEVICE)
-        old_critic_net = deepcopy(self.critic_net)
 
         for agent_idx in range(self.num_agents):
-            actor_net = ActorNetwork(self.env.observation_space[0].shape[0],
-                                     self.env.action_space[0].n).to(DEVICE)
+            critic_net = CriticNetwork(agent_idx, self.env.observation_space[0].shape[0], self.env.n_agents).to(DEVICE)
+            old_critic_net = deepcopy(critic_net)
+            actor_net = ActorNetwork(self.env.observation_space[0].shape[0], self.env.action_space[0].n).to(DEVICE)
 
-            agent = Agent(id=agent_idx, actor=actor_net, critic=self.critic_net, critic_old=old_critic_net, reward=[])
+            agent = Agent(id=agent_idx, actor=actor_net, critic=critic_net, critic_old=old_critic_net, reward=[])
             ppo = PPOTrainer(agent=agent,
                              ppo_clip_val=self.ppo_clip_val,
                              policy_lr=self.policy_lr,
@@ -351,9 +350,10 @@ class Mappo:
                 self.ppo_trainers[agent_idx].train_policy(obs, acts, act_log_probs, gaes, episode_idx)
 
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
-            obs_ = torch.stack(obs_).permute(1, 0, 2).contiguous().view(len(train_data[agent_idx][0]), -1)
+            obs_ = torch.stack(obs_).permute(1, 0, 2)
 
-            self.ppo_trainers[agent_idx].train_value(obs_, returns_, episode_idx)
+            for ppo_trainer in self.ppo_trainers:
+                ppo_trainer.train_value(obs_, returns_, episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
                 self.tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
