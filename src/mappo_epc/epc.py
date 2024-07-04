@@ -1,6 +1,5 @@
 """Runs the evolutionary population curriculum algorithm using the maddpg algorithm."""
 import abc
-import concurrent.futures
 import itertools
 import logging
 import random
@@ -25,22 +24,24 @@ logger = logging.getLogger()
 
 def train(train_agent: Mappo):
     train_agent.run()
+    return train_agent
 
 
-def train_agents_parallel(agents: Iterable[Mappo]):
+def train_agents_parallel(games: Iterable[Mappo]):
     """Runs the training for games in parallel.
 
     Args:
-        agents (Iterable[TrainingAgents]): The games in which to train agents.
+        games (Iterable[Mappo]): The games in which to train agents.
 
     Returns:
-        Iterable[TrainingAgents]: The trained agents.
+        Iterable[Mappo]: The trained agents.
     """
-    logger.info("Starting parallel training of %s games", len(agents))
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        results = list(executor.map(train, agents))
+    logger.info("Starting parallel training of %s games", len(games))
 
-    return results
+    for game in games:
+        game.run()
+
+    return games
 
 
 class EvolutionaryStage(abc.ABC):
@@ -95,18 +96,19 @@ class Mutation(EvolutionaryStage):
     dimensional agent parameter space.
     """
 
-    def __init__(self, name="Mutation"):
+    def __init__(self, name="Mutation", **kwargs):
         super().__init__(name)
+        self.game_kwargs = kwargs
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         logger.info("Running mutation for %s parallel games", len(population))
         # create training agent classes and assign them the agents
         num_parallel_games = len(population)
-        training_agents = [Mappo(**kwargs) for _ in range(num_parallel_games)]
-        for training_agents, trained_agents in zip(training_agents, population):
-            training_agents.agents = trained_agents
+        training_agents = [Mappo(**self.game_kwargs) for _ in range(num_parallel_games)]
+        for training_agent, trained_agents in zip(training_agents, population):
+            training_agent.agents = trained_agents
 
-        mutated_agents = train_agents_parallel(trained_agents)
+        mutated_agents = train_agents_parallel(training_agents)
 
         return [mutated_agents.agents for mutated_agents in mutated_agents]
 
@@ -180,6 +182,6 @@ class Epc:
 
         agents = [ta.agents for ta in training_agents]
         for stage in self.stages:
-            agents = [stage.run(agents)]
+            agents = stage.run(agents)
 
         return agents

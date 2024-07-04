@@ -25,8 +25,6 @@ youtube explanation: https://www.youtube.com/watch?v=HR8kQMTO8bk
 
 logger = logging.getLogger()
 
-tb_writer = SummaryWriter()
-
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
@@ -91,7 +89,8 @@ class PPOTrainer:
                  max_policy_train_iters=40,
                  value_train_iters=40,
                  policy_lr=3e-4,
-                 value_lr=1e-2):
+                 value_lr=1e-2,
+                 tb_writer=None):
         self.agent_id = agent.id
         self.ac = agent.actor
         self.cr = agent.critic
@@ -104,6 +103,7 @@ class PPOTrainer:
         self.policy_optim = optim.Adam(self.ac.parameters(), lr=policy_lr)
         self.value_optim = optim.Adam(self.cr.parameters(), lr=value_lr)
 
+        self.tb_writer = tb_writer
     def train_policy(self, obs, acts, old_log_probs, gaes, episode):
         loss_store = []
         for _ in range(self.max_policy_train_iters):
@@ -130,7 +130,7 @@ class PPOTrainer:
             if kl_div >= self.target_kl_div:
                 break
 
-        tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
+        self.tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
 
     def train_value(self, obs, returns, episode):
@@ -153,7 +153,7 @@ class PPOTrainer:
             torch.nn.utils.clip_grad_norm_(self.cr.parameters(), max_norm=10.0)
             self.value_optim.step()
 
-        tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
+        self.tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
 
@@ -277,6 +277,8 @@ class Mappo:
         self.agents = []
         self.ppo_trainers = []
 
+        self.tb_writer = SummaryWriter()
+
         self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
         self.critic_net = CriticNetwork(self.env.observation_space[0].shape[0],
                                         self.env.n_agents).to(DEVICE)
@@ -293,7 +295,8 @@ class Mappo:
                              value_lr=self.value_lr,
                              target_kl_div=self.target_kl_div,
                              max_policy_train_iters=self.max_policy_train_iters,
-                             value_train_iters=self.value_train_iters)
+                             value_train_iters=self.value_train_iters,
+                             tb_writer=self.tb_writer)
 
             self.agents.append(agent)
             self.ppo_trainers.append(ppo)
@@ -305,7 +308,7 @@ class Mappo:
                     "value loss": ["Multiline", [f"value/loss/agent_{i}" for i in range(self.num_agents)]],
                 },
             }
-            tb_writer.add_custom_scalars(layout)
+            self.tb_writer.add_custom_scalars(layout)
 
     def run(self):
         n_episodes = args.num_episodes
@@ -353,7 +356,7 @@ class Mappo:
             self.ppo_trainers[agent_idx].train_value(obs_, returns_, episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
-                tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
+                self.tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
                 logger.info('Episode %d | Avg Reward %.1f', episode_idx + 1, np.mean(ep_rewards[-print_freq:]))
                 logger.info('######################################################')
 
