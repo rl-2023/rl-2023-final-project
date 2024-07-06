@@ -9,6 +9,7 @@ import torch
 from torch import nn
 from torch import optim
 from torch.distributions.categorical import Categorical
+from torch.optim.lr_scheduler import StepLR
 from dataclasses import dataclass
 from copy import deepcopy
 import argparse
@@ -47,25 +48,31 @@ def parse_arguments():
                         type=int,
                         default=3,
                         help='The number of parallel games to play for the EPC.')
-    parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
+    parser.add_argument('--ppo_clip_val', type=float, default=0.05, help='PPO clip value')
     parser.add_argument('--policy_lr', type=float, default=0.002, help='Learning rate for the policy network')
     parser.add_argument('--value_lr', type=float, default=0.002, help='Learning rate for the value network')
     parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
-    parser.add_argument('--max_policy_train_iters', type=int, default=10, help='Maximum iterations for policy training')
-    parser.add_argument('--value_train_iters', type=int, default=10, help='Number of iterations for value training')
+    parser.add_argument('--max_policy_train_iters', type=int, default=2, help='Maximum iterations for policy training')
+    parser.add_argument('--value_train_iters', type=int, default=2, help='Number of iterations for value training')
 
     return parser.parse_args()
 
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 args = parse_arguments()
+
 '''
+#TODO fix KAN for EPC
+
 if args.kan:
     logger.info("Using KAN networks.")
     from .PPONetworks import KAN_ActorNetwork as ActorNetwork
     from .PPONetworks import KAN_CriticNetwork as CriticNetwork
 
 else:
+    logger.info("Using MLP networks.")
+    from .PPONetworks import MLP_ActorNetwork as ActorNetwork
+    from .PPONetworks import MLP_CriticNetwork as CriticNetwork
 '''
 
 logger.info("Using MLP networks.")
@@ -93,20 +100,27 @@ class PPOTrainer:
                  target_kl_div=0.01,
                  max_policy_train_iters=40,
                  value_train_iters=40,
-                 policy_lr=3e-4,
-                 value_lr=1e-2,
-                 tb_writer=None):
+                 policy_lr=0.002,
+                 value_lr=0.002,
+                 entropy_coef=0.001,
+                 tb_writer=None,
+                 lr_step_size=50,  
+                 lr_gamma=0.1):
         self.agent_id = agent.id
         self.ac = agent.actor
         self.cr = agent.critic
         self.old_cr = agent.critic_old
         self.ppo_clip_val = ppo_clip_val
         self.target_kl_div = target_kl_div
+        self.entropy_coef = entropy_coef
         self.max_policy_train_iters = max_policy_train_iters
         self.value_train_iters = value_train_iters
 
         self.policy_optim = optim.Adam(self.ac.parameters(), lr=policy_lr)
         self.value_optim = optim.Adam(self.cr.parameters(), lr=value_lr)
+
+        self.policy_scheduler = StepLR(self.policy_optim, step_size=lr_step_size, gamma=lr_gamma)
+        self.value_scheduler = StepLR(self.value_optim, step_size=lr_step_size, gamma=lr_gamma)
 
         self.tb_writer = tb_writer
     def train_policy(self, obs, acts, old_log_probs, gaes, episode):
@@ -118,22 +132,25 @@ class PPOTrainer:
             new_logits = self.ac.policy(obs)
             new_logits = Categorical(logits=new_logits)
             new_log_probs = new_logits.log_prob(acts)
-
+            entropy = new_logits.entropy()
             policy_ratio = torch.exp(new_log_probs - old_log_probs)
             clipped_ratio = policy_ratio.clamp(1 - self.ppo_clip_val, 1 + self.ppo_clip_val)
 
             clipped_loss = clipped_ratio * gaes
             full_loss = policy_ratio * gaes
-            policy_loss = -torch.min(full_loss, clipped_loss).mean()
-            loss_store.append(policy_loss.item())
+            policy_loss = torch.min(full_loss, clipped_loss).mean()+self.entropy_coef*entropy.mean()
+            final_loss = -policy_loss
+            loss_store.append(final_loss.item())
 
-            policy_loss.backward()
+            final_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.ac.parameters(), max_norm=10.0)
             self.policy_optim.step()
 
             kl_div = (old_log_probs - new_log_probs).mean()
             if kl_div >= self.target_kl_div:
                 break
+        
+        self.policy_scheduler.step()
 
         self.tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
@@ -163,7 +180,8 @@ class PPOTrainer:
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
 
-
+        self.value_scheduler.step()
+        print(self.value_optim.param_groups[0]['lr'])
 def discount_rewards(rewards, gamma=0.99):
     """
     Return discounted rewards based on the given rewards and gamma param.
@@ -236,7 +254,7 @@ def rollout(agents, env, max_steps=1000, render=False):
 
         # take a step in the environment
         next_obs, reward, done, _ = env.step(act_)
-        print(f"Actions {act_} | Rewards {reward}")
+        print(f"Actions {act_} | Rewards {reward} ")
         if render:
             env.render()
 
@@ -337,7 +355,8 @@ class Mappo:
         ep_rewards = []
 
         for episode_idx in range(n_episodes):
-            # Perform rollout
+            # Perform rollout 
+            print(f"################# EPISODE {episode_idx} #################")
             train_data, reward = rollout(self.agents, self.env, args.max_steps, render=args.render)
             ep_rewards.append(reward)
             returns_ = []
