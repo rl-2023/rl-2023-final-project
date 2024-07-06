@@ -48,12 +48,12 @@ def parse_arguments():
                         type=int,
                         default=3,
                         help='The number of parallel games to play for the EPC.')
-    parser.add_argument('--ppo_clip_val', type=float, default=0.05, help='PPO clip value')
-    parser.add_argument('--policy_lr', type=float, default=0.002, help='Learning rate for the policy network')
-    parser.add_argument('--value_lr', type=float, default=0.002, help='Learning rate for the value network')
+    parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
+    parser.add_argument('--policy_lr', type=float, default=0.00002, help='Learning rate for the policy network')
+    parser.add_argument('--value_lr', type=float, default=0.00002, help='Learning rate for the value network')
     parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
-    parser.add_argument('--max_policy_train_iters', type=int, default=2, help='Maximum iterations for policy training')
-    parser.add_argument('--value_train_iters', type=int, default=2, help='Number of iterations for value training')
+    parser.add_argument('--max_policy_train_iters', type=int, default=1, help='Maximum iterations for policy training')
+    parser.add_argument('--value_train_iters', type=int, default=1, help='Number of iterations for value training')
 
     return parser.parse_args()
 
@@ -103,9 +103,9 @@ class PPOTrainer:
                  policy_lr=0.002,
                  value_lr=0.002,
                  entropy_coef=0.001,
-                 tb_writer=None,
-                 lr_step_size=50,  
-                 lr_gamma=0.1):
+                 tb_writer=None):
+                 #lr_step_size=50,  
+                 #lr_gamma=1000):
         self.agent_id = agent.id
         self.ac = agent.actor
         self.cr = agent.critic
@@ -118,10 +118,10 @@ class PPOTrainer:
 
         self.policy_optim = optim.Adam(self.ac.parameters(), lr=policy_lr)
         self.value_optim = optim.Adam(self.cr.parameters(), lr=value_lr)
-
-        self.policy_scheduler = StepLR(self.policy_optim, step_size=lr_step_size, gamma=lr_gamma)
-        self.value_scheduler = StepLR(self.value_optim, step_size=lr_step_size, gamma=lr_gamma)
-
+        
+        #self.policy_scheduler = StepLR(self.policy_optim, step_size=lr_step_size, gamma=lr_gamma)
+        #self.value_scheduler = StepLR(self.value_optim, step_size=lr_step_size, gamma=lr_gamma)        
+ 
         self.tb_writer = tb_writer
     def train_policy(self, obs, acts, old_log_probs, gaes, episode):
         loss_store = []
@@ -150,7 +150,7 @@ class PPOTrainer:
             if kl_div >= self.target_kl_div:
                 break
         
-        self.policy_scheduler.step()
+        #self.policy_scheduler.step()
 
         self.tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
@@ -180,7 +180,7 @@ class PPOTrainer:
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
 
-        self.value_scheduler.step()
+        #self.value_scheduler.step()
         print(self.value_optim.param_groups[0]['lr'])
 
 def discount_rewards(rewards, gamma=0.99):
@@ -207,82 +207,6 @@ def calculate_gaes(rewards, values, gamma=0.99, decay=0.97):
         gaes.append(deltas[i] + decay * gamma * gaes[-1])
 
     return np.array(gaes[::-1])
-
-def rollout(agents, env, max_steps=1000, render=False):
-    logger.info("Doing rollout for %d steps", max_steps)
-    train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
-                  ]  # obs, act, reward, values, act_log_probs
-    
-    #TODO change it based on the pressureplate version
-    obs, _ = env.reset()     
-
-
-    if render:
-        env.render()
-    ep_reward = np.zeros(env.n_agents)
-
-    for _ in range(max_steps):
-        obs_ = []
-        act_ = []
-        reward_ = []
-        val_ = []
-        act_log_prob_ = []
-
-        # gather the actions and estimated values for each agent
-        for agent_idx in range(len(agents)):
-
-            logits = agents[agent_idx].actor(torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
-            act_distribution = Categorical(logits=logits)
-            act = act_distribution.sample()
-            act_log_prob = act_distribution.log_prob(act).item()
-
-            act = act.item()
-
-            act_.append(act)
-            act_log_prob_.append(act_log_prob)
-
-        for agent_idx in range(len(agents)):
-            obs_ts = torch.tensor([obs], dtype=torch.float32, device=DEVICE)
-            act_ts = torch.tensor([act_], dtype=torch.float32, device=DEVICE)
-            obs_act = torch.cat((obs_ts, act_ts.unsqueeze(-1)), dim=-1)
-            val = agents[agent_idx].critic(obs_act)
-            val = val.item()
-            val_.append(val)
-
-
-        # take a step in the environment
-        next_obs, reward, done, _ = env.step(act_)
-        print(f"Actions {act_} | Rewards {reward} ")
-        if render:
-            env.render()
-
-        for agent_idx in range(len(agents)):
-
-            reward_.append(reward[agent_idx])
-            agents[agent_idx].reward.append(reward[agent_idx])
-            obs_.append(obs[agent_idx])
-
-            for i, item in enumerate((obs_[agent_idx], act_[agent_idx], reward_[agent_idx],
-                                      val_[agent_idx], act_log_prob_[agent_idx])):
-                train_data[agent_idx][i].append(item)
-
-        obs = next_obs
-        ep_reward += reward
-
-        if all(done):
-            logger.info('All dones')
-            break
-
-    for i in range(len(train_data)):
-        for j in range(len(train_data[i])):
-            train_data[i][j] = np.asarray(train_data[i][j])
-
-    for agent_idx in range(len(agents)):
-        train_data[agent_idx][3] = calculate_gaes(train_data[agent_idx][2],
-                                                  train_data[agent_idx][3])
-
-    return train_data, np.sum(ep_reward)
-
 
 class Mappo:
 
@@ -345,18 +269,7 @@ class Mappo:
             }
             self.tb_writer.add_custom_scalars(layout)
 
-    def run(self):
-        n_episodes = args.num_episodes
-        print_freq = args.print_freq
-
-        # Training loop
-        ep_rewards = []
-
-        for episode_idx in range(n_episodes):
-            # Perform rollout 
-            print(f"################# EPISODE {episode_idx} #################")
-            train_data, reward = rollout(self.agents, self.env, args.max_steps, render=args.render)
-            ep_rewards.append(reward)
+    def update_networks(self,train_data, episode_idx):
             returns_ = []
             obs_ = []
             for agent_idx in range(len(self.agents)):
@@ -392,6 +305,114 @@ class Mappo:
             all_acts = torch.tensor([train_data[i][1] for i in range(len(train_data))]).permute(1, 0).to(DEVICE)
             for ppo_trainer in self.ppo_trainers:
                 ppo_trainer.train_value(obs_, returns_, all_acts, episode_idx)
+
+
+    def rollout(self,agents, env, max_steps=1000, episode_idx=0, render=False):
+        update_freq=1
+        logger.info("Doing rollout for %d steps", max_steps)
+        train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
+                    ]  # obs, act, reward, values, act_log_probs
+        
+        #TODO change it based on the pressureplate version
+        obs, _ = env.reset()     
+
+
+        if render:
+            env.render()
+        ep_reward = np.zeros(env.n_agents)
+
+        for current_step in range(max_steps):
+            obs_ = []
+            act_ = []
+            reward_ = []
+            val_ = []
+            act_log_prob_ = []
+
+            # gather the actions and estimated values for each agent
+            for agent_idx in range(len(agents)):
+
+                logits = agents[agent_idx].actor(torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
+                act_distribution = Categorical(logits=logits)
+                act = act_distribution.sample()
+                act_log_prob = act_distribution.log_prob(act).item()
+
+                act = act.item()
+
+                act_.append(act)
+                act_log_prob_.append(act_log_prob)
+
+            for agent_idx in range(len(agents)):
+                obs_ts = torch.tensor([obs], dtype=torch.float32, device=DEVICE)
+                act_ts = torch.tensor([act_], dtype=torch.float32, device=DEVICE)
+                obs_act = torch.cat((obs_ts, act_ts.unsqueeze(-1)), dim=-1)
+                val = agents[agent_idx].critic(obs_act)
+                val = val.item()
+                val_.append(val)
+
+
+            # take a step in the environment
+            next_obs, reward, done, _ = env.step(act_)
+            print(f"Actions {act_} | Rewards {reward} ")
+            if render:
+                env.render()
+
+            for agent_idx in range(len(agents)):
+
+                reward_.append(reward[agent_idx])
+                agents[agent_idx].reward.append(reward[agent_idx])
+                obs_.append(obs[agent_idx])
+
+                for i, item in enumerate((obs_[agent_idx], act_[agent_idx], reward_[agent_idx],
+                                        val_[agent_idx], act_log_prob_[agent_idx])):
+                    train_data[agent_idx][i].append(item)
+
+            obs = next_obs
+            ep_reward += reward
+
+            if (current_step+1) % update_freq == 0:
+                logger.info("Doing rollout for %d steps", max_steps)
+                for i in range(len(train_data)):
+                    for j in range(len(train_data[i])):
+                        train_data[i][j] = np.asarray(train_data[i][j])
+
+                for agent_idx in range(len(agents)):
+                    train_data[agent_idx][3] = calculate_gaes(train_data[agent_idx][2],
+                                                    train_data[agent_idx][3])
+                self.update_networks(train_data,episode_idx)
+                train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
+                    ]  # obs, act, reward, values, act_log_probs
+                
+
+            if all(done):
+                logger.info('All dones')
+                break
+
+        '''
+        for i in range(len(train_data)):
+            for j in range(len(train_data[i])):
+                train_data[i][j] = np.asarray(train_data[i][j])
+
+        for agent_idx in range(len(agents)):
+            train_data[agent_idx][3] = calculate_gaes(train_data[agent_idx][2],
+                                                    train_data[agent_idx][3])
+
+        return train_data, np.sum(ep_reward)        
+        '''
+        return np.sum(ep_reward)
+
+    def run(self):
+        n_episodes = args.num_episodes
+        print_freq = args.print_freq
+
+        # Training loop
+        ep_rewards = []
+
+        for episode_idx in range(n_episodes):
+            # Perform rollout 
+            print(f"################# EPISODE {episode_idx} #################")
+            reward = self.rollout(self.agents, self.env, args.max_steps, episode_idx, render=args.render)
+            ep_rewards.append(reward)
+            #self.update_networks(train_data,episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
                 self.tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)
