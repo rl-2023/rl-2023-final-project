@@ -154,10 +154,12 @@ class MLP_CriticNetwork(nn.Module):
         self.agent_id = agent_id
         self.device = device
         self.attn = Attention(obs_space_size, 64)
+        
+        '''
         self.mha_v = nn.MultiheadAttention(embed_dim=obs_space_size * 2, num_heads=2)
         self.norm_v = nn.LayerNorm(obs_space_size * 2)
         self.linear_v = nn.Linear(obs_space_size * 2, 64 * 2)
-        self.activation_v = nn.ReLU()
+        self.activation_v = nn.ReLU()    
 
         self.value_layers = nn.Sequential(
             #nn.Dropout(0.5),
@@ -168,7 +170,20 @@ class MLP_CriticNetwork(nn.Module):
             nn.Dropout(0.5),
             #nn.Linear(32,32),
             #nn.ReLU(),
+            nn.Linear(32, 1))        
+        '''
+        self.value_layers = nn.Sequential(
+            #nn.Dropout(0.5),
+            nn.Linear( obs_space_size * 2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            #nn.Linear(32,32),
+            #nn.ReLU(),
             nn.Linear(32, 1))
+
+
 
     def value(self, obs):
         attn_obs, _ = self.mha_v(obs, obs, obs)
@@ -192,9 +207,13 @@ class MLP_CriticNetwork(nn.Module):
 
         # concatenate the agent obs and the other summed obs to get a fixed size
         concat_obs = torch.concat((agent_obs, other_obs_summed), dim=-1)
-
+        '''
         attn_obs, _ = self.mha_v(concat_obs, concat_obs, concat_obs)
         z = self.activation_v(self.linear_v(self.norm_v(concat_obs + attn_obs)))
 
         value = self.value_layers(z)
-        return value
+        return value   
+        ''' 
+        return self.value_layers(concat_obs)    
+
+

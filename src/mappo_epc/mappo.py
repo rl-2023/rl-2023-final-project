@@ -49,7 +49,7 @@ def parse_arguments():
                         help='The number of parallel games to play for the EPC.')
     parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
     parser.add_argument('--policy_lr', type=float, default=0.002, help='Learning rate for the policy network')
-    parser.add_argument('--value_lr', type=float, default=0.02, help='Learning rate for the value network')
+    parser.add_argument('--value_lr', type=float, default=0.002, help='Learning rate for the value network')
     parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
     parser.add_argument('--max_policy_train_iters', type=int, default=10, help='Maximum iterations for policy training')
     parser.add_argument('--value_train_iters', type=int, default=10, help='Number of iterations for value training')
@@ -195,7 +195,12 @@ def rollout(agents, env, max_steps=1000, render=False):
     logger.info("Doing rollout for %d steps", max_steps)
     train_data = [[[], [], [], [], []] for _ in range(env.n_agents)
                   ]  # obs, act, reward, values, act_log_probs
-    obs, _ = env.reset()
+    
+
+    #TODO change it based on the pressureplate version
+    obs, _ = env.reset()     
+
+
     if render:
         env.render()
     ep_reward = np.zeros(env.n_agents)
@@ -231,7 +236,7 @@ def rollout(agents, env, max_steps=1000, render=False):
 
         # take a step in the environment
         next_obs, reward, done, _ = env.step(act_)
-
+        print(f"Actions {act_} | Rewards {reward}")
         if render:
             env.render()
 
@@ -397,4 +402,5 @@ def main():
 
 
 if __name__ == '__main__':
+    print(DEVICE)
     main()
