@@ -60,7 +60,7 @@ def parse_arguments():
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 args = parse_arguments()
 
-if args.kan == False:
+if args.kan:
     logger.info("Using KAN networks.")
     from .PPONetworks import KAN_ActorNetwork as ActorNetwork
     from .PPONetworks import KAN_CriticNetwork as CriticNetwork
