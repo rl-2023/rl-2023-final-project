@@ -136,15 +136,16 @@ class PPOTrainer:
         self.tb_writer.add_scalar(f"policy/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Policy loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
 
-    def train_value(self, obs, returns, episode):
+    def train_value(self, obs, returns, acts, episode):
 
         loss_store = []
         eps = self.ppo_clip_val
+        obs_action = torch.cat((obs, acts.unsqueeze(-1)), dim=-1)
         for _ in range(self.value_train_iters):
             self.value_optim.zero_grad()
 
-            old_values = self.old_cr(obs)
-            values = self.cr(obs)
+            old_values = self.old_cr(obs_action)
+            values = self.cr(obs_action)
             clipped_values = values.clamp(old_values - eps, old_values + eps)
             clipped_loss = (clipped_values - returns) ** 2
             full_value_loss = (returns - values) ** 2
@@ -206,8 +207,6 @@ def rollout(agents, env, max_steps=1000, render=False):
 
         # gather the actions and estimated values for each agent
         for agent_idx in range(len(agents)):
-            val = agents[agent_idx].critic(torch.tensor([obs], dtype=torch.float32, device=DEVICE))
-            val = val.item()
 
             logits = agents[agent_idx].actor(torch.tensor([obs[agent_idx]], dtype=torch.float32, device=DEVICE))
             act_distribution = Categorical(logits=logits)
@@ -217,8 +216,16 @@ def rollout(agents, env, max_steps=1000, render=False):
             act = act.item()
 
             act_.append(act)
-            val_.append(val)
             act_log_prob_.append(act_log_prob)
+
+        for agent_idx in range(len(agents)):
+            obs_ts = torch.tensor([obs], dtype=torch.float32, device=DEVICE)
+            act_ts = torch.tensor([act_], dtype=torch.float32, device=DEVICE)
+            obs_act = torch.cat((obs_ts, act_ts.unsqueeze(-1)), dim=-1)
+            val = agents[agent_idx].critic(obs_act)
+            val = val.item()
+            val_.append(val)
+
 
         # take a step in the environment
         next_obs, reward, done, _ = env.step(act_)
@@ -289,7 +296,7 @@ class Mappo:
         self.env = gym.make(f"pressureplate-linear-{num_agents}p-v0")
 
         for agent_idx in range(self.num_agents):
-            critic_net = CriticNetwork(agent_idx, self.env.observation_space[0].shape[0], self.env.n_agents).to(DEVICE)
+            critic_net = CriticNetwork(agent_idx, self.env.observation_space[0].shape[0] + 1, self.env.n_agents).to(DEVICE)
             old_critic_net = deepcopy(critic_net)
             actor_net = ActorNetwork(self.env.observation_space[0].shape[0], self.env.action_space[0].n).to(DEVICE)
 
@@ -358,8 +365,9 @@ class Mappo:
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
             obs_ = torch.stack(obs_).permute(1, 0, 2)
 
+            all_acts = torch.tensor([train_data[i][1] for i in range(len(train_data))]).permute(1, 0)
             for ppo_trainer in self.ppo_trainers:
-                ppo_trainer.train_value(obs_, returns_, episode_idx)
+                ppo_trainer.train_value(obs_, returns_, all_acts, episode_idx)
 
             if (episode_idx + 1) % print_freq == 0:
                 self.tb_writer.add_scalar("Average Episode Reward", np.mean(ep_rewards[-print_freq:]), episode_idx + 1)

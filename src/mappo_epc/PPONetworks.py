@@ -154,7 +154,7 @@ class MLP_CriticNetwork(nn.Module):
         self.agent_id = agent_id
         self.device = device
         self.attn = Attention(obs_space_size, 64)
-        self.mha_v = nn.MultiheadAttention(embed_dim=obs_space_size * 2, num_heads=6)
+        self.mha_v = nn.MultiheadAttention(embed_dim=obs_space_size * 2, num_heads=2)
         self.norm_v = nn.LayerNorm(obs_space_size * 2)
         self.linear_v = nn.Linear(obs_space_size * 2, 64 * 2)
         self.activation_v = nn.ReLU()
