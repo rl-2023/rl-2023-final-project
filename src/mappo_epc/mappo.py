@@ -59,16 +59,18 @@ def parse_arguments():
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 args = parse_arguments()
-
+'''
 if args.kan:
     logger.info("Using KAN networks.")
     from .PPONetworks import KAN_ActorNetwork as ActorNetwork
     from .PPONetworks import KAN_CriticNetwork as CriticNetwork
 
 else:
-    logger.info("Using MLP networks.")
-    from .PPONetworks import MLP_ActorNetwork as ActorNetwork
-    from .PPONetworks import MLP_CriticNetwork as CriticNetwork
+'''
+
+logger.info("Using MLP networks.")
+from .PPONetworks import MLP_ActorNetwork as ActorNetwork
+from .PPONetworks import MLP_CriticNetwork as CriticNetwork
 
 
 @dataclass
@@ -363,9 +365,9 @@ class Mappo:
                 self.ppo_trainers[agent_idx].train_policy(obs, acts, act_log_probs, gaes, episode_idx)
 
             returns_ = torch.stack(returns_).permute(1, 0)  # .view(len(train_data[agent_idx][0]),-1)
-            obs_ = torch.stack(obs_).permute(1, 0, 2)
+            obs_ = torch.stack(obs_).permute(1, 0, 2).to(DEVICE)
 
-            all_acts = torch.tensor([train_data[i][1] for i in range(len(train_data))]).permute(1, 0)
+            all_acts = torch.tensor([train_data[i][1] for i in range(len(train_data))]).permute(1, 0).to(DEVICE)
             for ppo_trainer in self.ppo_trainers:
                 ppo_trainer.train_value(obs_, returns_, all_acts, episode_idx)
 
