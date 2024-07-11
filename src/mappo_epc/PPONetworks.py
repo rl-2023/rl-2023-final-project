@@ -4,6 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from .KAN import KANLayer
 
+################ MLP NETWORKS #######################
 
 class Attention(nn.Module):
     """Calculate the attention weights between the focus agent observation and the other observations.
@@ -62,6 +63,98 @@ class Attention(nn.Module):
         # make the alpha values match the input dimension (batch, agent, dim)
         return alphas
 
+class MLP_ActorNetwork(nn.Module):
+
+    def __init__(self,
+                 obs_space_size,
+                 action_space_size,
+                 device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.device = device
+        self.mha = nn.MultiheadAttention(embed_dim=obs_space_size, num_heads=2)
+        self.norm = nn.LayerNorm(obs_space_size)
+        self.linear = nn.Linear(obs_space_size, 64 * 2)
+        self.activation = nn.ReLU()
+
+        self.policy_layers = nn.Sequential(
+            #nn.Dropout(0.5),
+            nn.Linear(64 * 2, 64),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.LayerNorm(32),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, action_space_size))
+
+    def policy(self, obs):
+        attn_obs, _ = self.mha(obs, obs, obs)
+        z = self.activation(self.linear(self.norm(obs + attn_obs)))
+        policy_logits = self.policy_layers(z)
+        return policy_logits
+
+    def forward(self, obs):
+        attn_obs, _ = self.mha(obs, obs, obs)
+        z = self.activation(self.linear(self.norm(obs + attn_obs)))
+        policy_logits = self.policy_layers(z)
+
+        return policy_logits
+
+class MLP_CriticNetwork(nn.Module):
+
+    def __init__(self,
+                 agent_id: int,
+                 obs_space_size,
+                 n_agents,
+                 device='cuda' if torch.cuda.is_available() else 'cpu'):
+        super().__init__()
+        self.agent_id = agent_id
+        self.device = device
+        self.attn = Attention(obs_space_size, 64)
+        
+        self.value_layers = nn.Sequential(
+            nn.Dropout(0.5),
+            nn.LayerNorm(obs_space_size * 2),
+            nn.Linear( obs_space_size * 2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(32,32),
+            nn.ReLU(),
+            nn.Linear(32, 1))
+
+
+
+    def value(self, obs):
+        attn_obs, _ = self.mha_v(obs, obs, obs)
+        z = self.activation_v(self.linear_v(self.norm_v(obs + attn_obs)))
+        value = self.value_layers(z)
+        return value
+
+    def forward(self, obs):
+        # get all the IDs that are not from this agent
+        agent_ids = torch.tensor([i for i in range(0, obs.shape[1]) if i != self.agent_id])
+
+        # get the obs from all the other agents
+        other_obs = obs[:, agent_ids]
+
+        # get the obs of the agent
+        agent_obs = obs[:, [self.agent_id]]
+
+        attn_weights = self.attn(agent_obs, other_obs)
+        other_obs_weighted = other_obs * attn_weights
+        other_obs_summed = torch.sum(other_obs_weighted, dim=1).unsqueeze(1)
+
+        # concatenate the agent obs and the other summed obs to get a fixed size
+        concat_obs = torch.concat((agent_obs, other_obs_summed), dim=-1)
+
+        return self.value_layers(concat_obs)    
+
+
+################ KAN NETWORKS #######################
+#TODO fix input dim in KANCritic for EPC
 
 class KAN_ActorNetwork(nn.Module):
 
@@ -105,115 +198,5 @@ class KAN_CriticNetwork(nn.Module):
     def forward(self, obs):
         value = self.value_layers(obs)
         return value
-
-
-class MLP_ActorNetwork(nn.Module):
-
-    def __init__(self,
-                 obs_space_size,
-                 action_space_size,
-                 device='cuda' if torch.cuda.is_available() else 'cpu'):
-        super().__init__()
-        self.device = device
-        self.mha = nn.MultiheadAttention(embed_dim=obs_space_size, num_heads=2)
-        self.norm = nn.LayerNorm(obs_space_size)
-        self.linear = nn.Linear(obs_space_size, 64 * 2)
-        self.activation = nn.ReLU()
-
-        self.policy_layers = nn.Sequential(
-            #nn.Dropout(0.5),
-            nn.Linear(64 * 2, 64),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, action_space_size))
-
-    def policy(self, obs):
-        attn_obs, _ = self.mha(obs, obs, obs)
-        z = self.activation(self.linear(self.norm(obs + attn_obs)))
-        policy_logits = self.policy_layers(z)
-        return policy_logits
-
-    def forward(self, obs):
-        attn_obs, _ = self.mha(obs, obs, obs)
-        z = self.activation(self.linear(self.norm(obs + attn_obs)))
-        policy_logits = self.policy_layers(z)
-
-        return policy_logits
-
-
-class MLP_CriticNetwork(nn.Module):
-
-    def __init__(self,
-                 agent_id: int,
-                 obs_space_size,
-                 n_agents,
-                 device='cuda' if torch.cuda.is_available() else 'cpu'):
-        super().__init__()
-        self.agent_id = agent_id
-        self.device = device
-        self.attn = Attention(obs_space_size, 64)
-        
-        '''
-        self.mha_v = nn.MultiheadAttention(embed_dim=obs_space_size * 2, num_heads=2)
-        self.norm_v = nn.LayerNorm(obs_space_size * 2)
-        self.linear_v = nn.Linear(obs_space_size * 2, 64 * 2)
-        self.activation_v = nn.ReLU()    
-
-        self.value_layers = nn.Sequential(
-            #nn.Dropout(0.5),
-            nn.Linear(64 * 2, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            #nn.Linear(32,32),
-            #nn.ReLU(),
-            nn.Linear(32, 1))        
-        '''
-        self.value_layers = nn.Sequential(
-            #nn.Dropout(0.5),
-            nn.Linear( obs_space_size * 2, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            #nn.Linear(32,32),
-            #nn.ReLU(),
-            nn.Linear(32, 1))
-
-
-
-    def value(self, obs):
-        attn_obs, _ = self.mha_v(obs, obs, obs)
-        z = self.activation_v(self.linear_v(self.norm_v(obs + attn_obs)))
-        value = self.value_layers(z)
-        return value
-
-    def forward(self, obs):
-        # get all the IDs that are not from this agent
-        agent_ids = torch.tensor([i for i in range(0, obs.shape[1]) if i != self.agent_id])
-
-        # get the obs from all the other agents
-        other_obs = obs[:, agent_ids]
-
-        # get the obs of the agent
-        agent_obs = obs[:, [self.agent_id]]
-
-        attn_weights = self.attn(agent_obs, other_obs)
-        other_obs_weighted = other_obs * attn_weights
-        other_obs_summed = torch.sum(other_obs_weighted, dim=1).unsqueeze(1)
-
-        # concatenate the agent obs and the other summed obs to get a fixed size
-        concat_obs = torch.concat((agent_obs, other_obs_summed), dim=-1)
-        '''
-        attn_obs, _ = self.mha_v(concat_obs, concat_obs, concat_obs)
-        z = self.activation_v(self.linear_v(self.norm_v(concat_obs + attn_obs)))
-
-        value = self.value_layers(z)
-        return value   
-        ''' 
-        return self.value_layers(concat_obs)    
 
 
