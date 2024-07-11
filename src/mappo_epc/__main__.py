@@ -1,8 +1,11 @@
 import logging.config
+import pickle
 from pathlib import Path
 
 from mappo_epc.mappo import parse_arguments
 from mappo_epc import epc
+
+
 
 Path("logs").mkdir(exist_ok=True)
 
@@ -32,11 +35,14 @@ if __name__ == '__main__':
                             target_kl_div=args.target_kl_div,
                             max_policy_train_iters=args.max_policy_train_iters,
                             value_train_iters=args.value_train_iters)
-    selection = epc.Selection(args.parallel_games)
+    selection = epc.Selection(args.num_agents * 2)
 
     evolution = epc.Epc(args.parallel_games, [crossover, mutation, selection], args.num_agents,
                         args.num_episodes, args.max_steps, args.render, args.print_freq, args.ppo_clip_val,
                         args.policy_lr, args.value_lr, args.target_kl_div, args.max_policy_train_iters,
                         args.value_train_iters)
 
-    evolution.run()
+    final_agents = evolution.run()
+
+    with open("final_agents.pkl", "wb") as f:
+        pickle.dump(final_agents, f)
