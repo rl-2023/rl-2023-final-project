@@ -20,25 +20,23 @@ from torch.utils.tensorboard import SummaryWriter
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 """
-PPO original implementation from: https://colab.research.google.com/drive/1MsRlEWRAk712AQPmoM9X9E6bNeHULRDb?usp=sharing#scrollTo=J6-bk718ch2E
-
-youtube explanation: https://www.youtube.com/watch?v=HR8kQMTO8bk
+PPO backbone implementation from: https://colab.research.google.com/drive/1MsRlEWRAk712AQPmoM9X9E6bNeHULRDb?usp=sharing#scrollTo=J6-bk718ch2E
 """
 
 logger = logging.getLogger()
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='MADDPG RL Parameters',
+    parser = argparse.ArgumentParser(description='MAPPO RL Parameters',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # Environment parameters
     parser.add_argument('--num_agents', type=int, default=2, help='Number of agents')
-    parser.add_argument('--num_episodes', type=int, default=1000, help='Number of episodes')
+    parser.add_argument('--num_episodes', type=int, default=1, help='Number of episodes')
     parser.add_argument('--max_steps', type=int, default=500, help='Number of steps per episode')
     parser.add_argument('--kan',
                         type=bool,
-                        default=True,
+                        default=False,
                         help='Bool value if usining KAN networks for Actor and Critic')
     parser.add_argument('--render',
                         action='store_true',
@@ -51,8 +49,8 @@ def parse_arguments():
     parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
     parser.add_argument('--policy_lr', type=float, default=0.00002, help='Learning rate for the policy network')
     parser.add_argument('--value_lr', type=float, default=0.00002, help='Learning rate for the value network')
-    parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
     parser.add_argument('--entropy_coef', type=float, default=0.001, help='Entropy coefficient')
+    parser.add_argument('--target_kl_div', type=float, default=0.02, help='Target KL divergence')
     parser.add_argument('--max_policy_train_iters', type=int, default=1, help='Maximum iterations for policy training')
     parser.add_argument('--value_train_iters', type=int, default=1, help='Number of iterations for value training')
 
@@ -91,7 +89,6 @@ class Agent:
 
     def avg_rewards(self):
         return np.mean(self.reward)
-
 
 class PPOTrainer:
 
@@ -174,7 +171,6 @@ class PPOTrainer:
         self.tb_writer.add_scalar(f"value/loss/agent_{self.agent_id}", np.mean(loss_store), episode)
         logger.info("Value loss: avg %f, std %f", np.mean(loss_store), np.std(loss_store))
         logger.info('----')
-
 
 def discount_rewards(rewards, gamma=0.99):
     """
@@ -380,17 +376,6 @@ class Mappo:
                 logger.info('All dones')
                 break
 
-        '''
-        for i in range(len(train_data)):
-            for j in range(len(train_data[i])):
-                train_data[i][j] = np.asarray(train_data[i][j])
-
-        for agent_idx in range(len(agents)):
-            train_data[agent_idx][3] = calculate_gaes(train_data[agent_idx][2],
-                                                    train_data[agent_idx][3])
-
-        return train_data, np.sum(ep_reward)        
-        '''
         return np.sum(ep_reward)
 
     def run(self):
@@ -412,7 +397,6 @@ class Mappo:
                 logger.info('Episode %d | Avg Reward %.1f', episode_idx + 1, np.mean(ep_rewards[-print_freq:]))
                 logger.info('######################################################')
 
-
 def main():
     args = parse_arguments()
 
@@ -430,7 +414,6 @@ def main():
                   game_id="0")
 
     mappo.run()
-
 
 if __name__ == '__main__':
     print(DEVICE)

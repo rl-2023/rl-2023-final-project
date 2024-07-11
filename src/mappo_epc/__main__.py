@@ -25,13 +25,13 @@ if __name__ == '__main__':
 
     crossover = epc.Crossover()
     mutation = epc.Mutation(num_agents=args.num_agents * 2,
-                            num_episodes=args.num_episodes,
+                            num_episodes= 1, #args.num_episodes,
                             max_steps=args.max_steps,
                             render=args.render,
                             print_freq=args.print_freq,
                             ppo_clip_val=args.ppo_clip_val,
-                            policy_lr=args.policy_lr,
-                            value_lr=args.value_lr,
+                            policy_lr=0.0001,#args.policy_lr,
+                            value_lr=0.0001, #args.value_lr,
                             target_kl_div=args.target_kl_div,
                             max_policy_train_iters=args.max_policy_train_iters,
                             value_train_iters=args.value_train_iters)

@@ -152,7 +152,6 @@ class MLP_CriticNetwork(nn.Module):
 
         return self.value_layers(concat_obs)    
 
-
 ################ KAN NETWORKS #######################
 #TODO fix input dim in KANCritic for EPC
 
@@ -176,7 +175,6 @@ class KAN_ActorNetwork(nn.Module):
     def forward(self, obs):
         policy_logits = self.policy_layers(obs)
         return policy_logits
-
 
 class KAN_CriticNetwork(nn.Module):
 
