@@ -33,7 +33,7 @@ def parse_arguments():
     # Environment parameters
     parser.add_argument('--num_agents', type=int, default=2, help='Number of agents')
     parser.add_argument('--num_episodes', type=int, default=1, help='Number of episodes')
-    parser.add_argument('--max_steps', type=int, default=500, help='Number of steps per episode')
+    parser.add_argument('--max_steps', type=int, default=5, help='Number of steps per episode')
     parser.add_argument('--kan',
                         type=bool,
                         default=False,
@@ -44,7 +44,7 @@ def parse_arguments():
     parser.add_argument('--print_freq', type=int, default=1, help='Print frequence wrt episodes')
     parser.add_argument('--parallel_games',
                         type=int,
-                        default=3,
+                        default=2,
                         help='The number of parallel games to play for the EPC.')
     parser.add_argument('--ppo_clip_val', type=float, default=0.2, help='PPO clip value')
     parser.add_argument('--policy_lr', type=float, default=0.00002, help='Learning rate for the policy network')
