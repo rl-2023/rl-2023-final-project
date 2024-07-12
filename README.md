@@ -74,7 +74,7 @@ coordinates are concatenated at the end, giving us an observation of size 1x102.
 The reward is individual for each agent and is the Manhattan distance to that agent's pressure plate.
 
 
-# Model
+# Model - MADDPG
 We adopt the decentralized execution framework, so each agent has its own Q function and policy
 network. 
 
@@ -123,7 +123,7 @@ Install as a package
 pip install -e .
 ```
 
-The module has the following parameters, all with default values.
+The MADDPG module has the following parameters, all with default values.
 ``` 
 MADDPG RL Parameters
 
@@ -146,6 +146,40 @@ options:
   --render              Render the environment after each step (default: False)
 ```
 
+The MAPPO module has the following parameters:
+
+``` 
+MAPPO RL Parameters
+
+options:
+  -h, --help            show this help message and exit
+  --num_agents NUM_AGENTS
+                        Number of agents (default: 2)
+  --num_episodes NUM_EPISODES
+                        Number of episodes (default: 1)
+  --max_steps MAX_STEPS
+                        Number of steps per episode (default: 500)
+  --kan KAN             Bool value if usining KAN networks for Actor and Critic (default: False)
+  --render              Render the environment after each step (default: False)
+  --print_freq PRINT_FREQ
+                        Print frequence wrt episodes (default: 1)
+  --parallel_games PARALLEL_GAMES
+                        The number of parallel games to play for the EPC. (default: 3)
+  --ppo_clip_val PPO_CLIP_VAL
+                        PPO clip value (default: 0.2)
+  --policy_lr POLICY_LR
+                        Learning rate for the policy network (default: 2e-05)
+  --value_lr VALUE_LR   Learning rate for the value network (default: 2e-05)
+  --entropy_coef ENTROPY_COEF
+                        Entropy coefficient (default: 0.001)
+  --target_kl_div TARGET_KL_DIV
+                        Target KL divergence (default: 0.02)
+  --max_policy_train_iters MAX_POLICY_TRAIN_ITERS
+                        Maximum iterations for policy training (default: 1)
+  --value_train_iters VALUE_TRAIN_ITERS
+                        Number of iterations for value training (default: 1)
+```
+
 To execute the module with default values, do: 
 ```shell
 python -m maddpg_epc
@@ -159,4 +193,17 @@ python __main__.py
 The training algorithm logs to **tensorboard**, to start the tensorboard server:
 ```shell
 tensorboard --logdir=runs
+```
+
+# Model - MAPPO
+To run just the MAPPO:
+
+```shell
+python -m mappo_epc.mappo
+```
+
+To run the MAPPO with EPC:
+
+```shell
+python -m mappo_epc
 ```
