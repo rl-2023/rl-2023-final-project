@@ -73,8 +73,9 @@ class Crossover(EvolutionaryStage):
     them into another set. Finally, we sample C random pairs.
     """
 
-    def __init__(self, name="Crossover"):
+    def __init__(self, name="Crossover", **kwargs):
         super().__init__(name)
+        self.c = kwargs.get("c")
 
     def run(self, population: Iterable[Iterable[Agent]], **kwargs) -> Iterable[Iterable[Agent]]:
         """Runs the crossover stage."""
@@ -82,7 +83,11 @@ class Crossover(EvolutionaryStage):
         agent_pairs = list(itertools.combinations_with_replacement(population, 2))
         agent_pairs = [(pairs[0] + pairs[1]) for pairs in agent_pairs]
 
-        c = kwargs.get('c', len(agent_pairs))
+        if not self.c:
+            c = len(agent_pairs)
+        else:
+            c = self.c
+
         sampled_sets = random.sample(agent_pairs, c)
 
         return sampled_sets
