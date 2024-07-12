@@ -387,7 +387,7 @@ class Mappo:
         for episode_idx in range(n_episodes):
             # Perform rollout 
             print(f"################# EPISODE {episode_idx} #################")
-            reward = self.rollout(self.agents, self.env, args.max_steps, episode_idx, render=args.render)
+            reward = self.rollout(self.agents, self.env, self.max_steps, episode_idx, render=self.render)
             ep_rewards.append(reward)
             #self.update_networks(train_data,episode_idx)
 
