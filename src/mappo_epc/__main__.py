@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     crossover = epc.Crossover()
     mutation = epc.Mutation(num_agents=args.num_agents * 2,
-                            num_episodes= 1, #args.num_episodes,
+                            num_episodes= 1000, #args.num_episodes,
                             max_steps=args.max_steps,
                             render=args.render,
                             print_freq=args.print_freq,

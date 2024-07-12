@@ -31,8 +31,10 @@ if __name__ == '__main__':
     obs = torch.tensor(obs).unsqueeze(dim=0)
 
     done = False
-
+    max_steps_validation=1000
+    cnt=0
     while not done:
+        cnt+=1
         if args.render:
             env.render()
 
@@ -50,3 +52,5 @@ if __name__ == '__main__':
         obs, _, done, _ = env.step(actions)
         done = all(done)
         obs = torch.tensor(obs).unsqueeze(dim=0)
+        if cnt==max_steps_validation:
+            break
