@@ -11,7 +11,7 @@ dependencies = [
     "numpy==1.26.4",
     "matplotlib==3.8.3",
     "pandas==2.2.1",
-    "pressureplate @ git+https://github.com/rl-2023/pressureplate.git",
+    "pressureplate @ git+https://github.com/rl-2023/pressureplate@26576992df9fcc18b9e566e6b97661fa75fb8e84",
     "pytest==8.1.1",
     "pylint==3.1.0",
     "tensorboard==2.16.2",
