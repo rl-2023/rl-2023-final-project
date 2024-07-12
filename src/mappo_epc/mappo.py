@@ -58,7 +58,6 @@ def parse_arguments():
 
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-args = parse_arguments()
 
 '''
 #TODO fix KAN for EPC
@@ -100,7 +99,7 @@ class PPOTrainer:
                  value_train_iters=40,
                  policy_lr=0.002,
                  value_lr=0.002,
-                 entropy_coef=args.entropy_coef,
+                 entropy_coef=0.001,
                  tb_writer=None):
 
         self.agent_id = agent.id
@@ -379,8 +378,8 @@ class Mappo:
         return np.sum(ep_reward)
 
     def run(self):
-        n_episodes = args.num_episodes
-        print_freq = args.print_freq
+        n_episodes = self.num_episodes
+        print_freq = self.print_freq
 
         # Training loop
         ep_rewards = []
