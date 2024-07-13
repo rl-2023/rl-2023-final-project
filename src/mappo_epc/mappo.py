@@ -1,5 +1,6 @@
 import datetime
 import logging
+import pickle
 
 import gym
 import pressureplate
@@ -413,6 +414,11 @@ def main():
                   game_id="0")
 
     mappo.run()
+
+    dt_string = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    with open(f"mappo_final_agents_{dt_string}.pkl", "wb") as f:
+        pickle.dump(mappo.agents, f)
+
 
 if __name__ == '__main__':
     print(DEVICE)

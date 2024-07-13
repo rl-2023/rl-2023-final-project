@@ -1,5 +1,6 @@
 import logging.config
 import pickle
+from datetime import datetime
 from pathlib import Path
 
 from mappo_epc.mappo import parse_arguments
@@ -44,5 +45,6 @@ if __name__ == '__main__':
 
     final_agents = evolution.run()
 
-    with open("final_agents.pkl", "wb") as f:
+    dt_string = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    with open(f"epc_final_agents_{dt_string}.pkl", "wb") as f:
         pickle.dump(final_agents, f)
